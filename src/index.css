@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 시스템 다크모드 강제 무시 — class 기반 만 사용 */
+html {
+  color-scheme: light !important;
+}
+html.dark {
+  color-scheme: dark !important;
+}
+
+/* 레이아웃 전체 높이 */
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+/* 스크롤바 숨기기 */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 폰트만 지정 */
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+}
+@layer components {
+  /* 💬 챗봇 말풍선용 마크다운 공통 스타일 */
+  .chat-markdown {
+    @apply prose prose-sm dark:prose-invert max-w-none;
+  }
+
+  /* 말풍선 안에서 위아래 여백 줄이기 */
+  .chat-markdown p {
+    @apply my-1;
+  }
+
+  /* 제목들: 너무 크지 않게 살짝만 강조 */
+  .chat-markdown h1 {
+    @apply text-lg font-semibold mt-1 mb-1;
+  }
+  .chat-markdown h2 {
+    @apply text-base font-semibold mt-1 mb-1;
+  }
+  .chat-markdown h3 {
+    @apply text-sm font-semibold mt-1 mb-1;
+  }
+
+  /* 리스트: 살짝 안쪽으로 + 간격 좁게 */
+  .chat-markdown ul,
+  .chat-markdown ol {
+    @apply my-1 pl-5;
+  }
+  .chat-markdown li {
+    @apply my-0.5;
+  }
+
+  /* 인라인 코드 */
+  .chat-markdown code {
+    @apply px-1 py-0.5 rounded bg-gray-100 text-[0.85rem] dark:bg-neutral-800 dark:text-gray-100;
+  }
+
+  /* 코드 블럭 */
+  .chat-markdown pre {
+    @apply mt-2 mb-2 rounded-lg bg-gray-900 text-gray-100 text-[0.8rem] p-3 overflow-x-auto;
+  }
+  .chat-markdown pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+
+  /* 인용구 (blockquote) */
+  .chat-markdown blockquote {
+    @apply border-l-4 border-indigo-400 bg-indigo-50/60 dark:bg-neutral-900/60 dark:border-indigo-500 px-3 py-2 my-2 text-[0.9rem] text-gray-700 dark:text-gray-200;
+  }
+
+  /* 링크 */
+  .chat-markdown a {
+    @apply text-indigo-600 dark:text-indigo-300 underline underline-offset-2;
+  }
+
+  /* 표 (table) */
+  .chat-markdown table {
+    @apply w-full text-xs border-collapse my-2;
+  }
+  .chat-markdown thead {
+    @apply bg-gray-100 dark:bg-neutral-900;
+  }
+  .chat-markdown th,
+  .chat-markdown td {
+    @apply border border-gray-200 dark:border-neutral-700 px-2 py-1;
+  }
+}
+.markdown-body ol {
+  list-style: decimal;
+  margin-left: 1.25rem;
+}
+
+.markdown-body li {
+  margin-bottom: 0.25rem;
+}
+@layer components {
+  /* 🔥 prose가 죽인 리스트 번호 되살리기 */
+  .chat-markdown ol {
+    list-style-type: decimal !important;
+    padding-left: 1.25rem;
+  }
+
+  .chat-markdown ul {
+    list-style-type: disc !important;
+    padding-left: 1.25rem;
+  }
+
+  .chat-markdown li {
+    margin-bottom: 0.25rem;
+  }
+}
