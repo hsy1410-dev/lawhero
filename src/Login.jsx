@@ -53,9 +53,9 @@ export default function Login({ goSignup, onFinishLogin }) {
             "
           >
             <div className="bg-white/90 backdrop-blur-xl p-8 rounded-2xl w-80">
-              <h2 className="text-lg font-semibold mb-4 text-center">
-                LAW HERO
-              </h2>
+             <h2 className="text-lg font-semibold mb-4 text-center text-sky-300">
+  LAW HERO
+</h2>
 
               <form onSubmit={handleAuth}>
                 <input
