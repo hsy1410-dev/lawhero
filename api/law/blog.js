@@ -74,7 +74,7 @@ const OUTPUT_SCHEMA = `
    전체 문체는 구성 선택 번호에 따라 일관성 유지
    ,글 쓸 때 마다 글의 구성과 문단의 순서가 완전히 달라야함)",
   "conclusion": "string ( 결론은 ‘요약 → 공감 문장 → 클릭 유도 문장’ 순으로 구성.  )",
-  "summary_table": "string (markdown table, 글 전체 요약)"
+  "summary_table": "string (markdown table, 글 전체 요약, 글 마다 각기 다른 표 구성)"
 }
 `;
 
@@ -137,7 +137,7 @@ ${REF.t1}
 - title에는 #을 쓰지 말고 제목 텍스트만 작성
 - intro는 3~5문장 엄수
 - intro 형식은 도입부 형식 지키기!
-- body는 H2/H3 구조 필수, 2,000자 이상
+- body는 H2/H3 구조 필수, 2,000자 이상으로 글 써야함 필수
 - summary_table은 markdown table 필수
 
 # 참고 지식 (재작성용, 복붙 금지)
