@@ -83,7 +83,12 @@ export default function Login({ goSignup, onFinishLogin }) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full p-2 rounded text-white bg-indigo-600 disabled:opacity-50"
+                  className="
+            w-full p-3 rounded-lg text-white
+            bg-gradient-to-r from-sky-400 to-pink-400
+            hover:from-sky-500 hover:to-pink-500
+            transition
+          "
                 >
                   로그인
                 </button>
