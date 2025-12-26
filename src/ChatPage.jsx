@@ -561,7 +561,11 @@ useEffect(() => {
       const r = await fetch("/api/law/blog", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: msgs }),
+        body: JSON.stringify({
+  messages: msgs,
+  category: "블로그 상담",
+  tone: currentConv?.tone, // ⭐ 필수
+}),
       });
 
       const d = await r.json();
@@ -597,8 +601,9 @@ useEffect(() => {
   const r = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: msgs }),
-    tone: currentConv?.tone,
+    body: JSON.stringify({ messages: msgs ,
+      tone: currentConv?.tone,}),
+    
   });
 
   const data = await r.json();
@@ -708,24 +713,22 @@ try {
 };
 
   /* ---------------- Tone ---------------- */
-  const selectTone = async (toneName) => {
-    await updateDoc(
-      doc(db, "users", user.uid, "conversations", currentId),
-      { tone: tone.key }
+ const selectTone = async (toneKey) => {
+  await updateDoc(
+    doc(db, "users", user.uid, "conversations", currentId),
+    { tone: toneKey }
+  );
+  setToneModal(false);
+
+  if (messages.length === 0) {
+    await saveMessage(
+      "bot",
+      `좋습니다! 블로그 톤 선택이 완료되었습니다.\n"시작"이라고 입력하면 템플릿을 안내해드릴게요.`
     );
-    setToneModal(false);
+  }
+};
 
-   if (messages.length === 0) {
-  const text = `좋습니다! 블로그 톤 선택이 완료되었습니다.\n"시작"이라고 입력하면 템플릿을 안내해드릴게요.`;
 
-  await saveMessage("bot", text);
-
-  // 상태 정리 (혹시 남아있을 수 있는 플래그)
-  setShowIntroTyping(false);
-  setIntroTargetConvId(null);
-}
-
-  };
 const openProjectModal = (project) => {
   setProjectEditing(project);
   setProjectModalOpen(true);
