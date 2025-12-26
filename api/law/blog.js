@@ -138,7 +138,6 @@ ${REF.t1}
 - intro는 3~5문장 엄수
 - intro 형식은 도입부 형식 지키기!
 - body는 H2/H3 구조 필수, 2,000자 이상
-- conclusion에는 반드시 bullet 리스트 포함
 - summary_table은 markdown table 필수
 
 # 참고 지식 (재작성용, 복붙 금지)
