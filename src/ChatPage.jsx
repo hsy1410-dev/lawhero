@@ -157,6 +157,8 @@ const [globalEnabled, setGlobalEnabled] = useState(true);
 
   const [messages, setMessages] = useState([]); // ✅ 선택된 상담의 메시지들만
   const [input, setInput] = useState("");
+  const [profile, setProfile] = useState(null);
+
   const [loading, setLoading] = useState(false);
 const addChatConversation = async () => {
   if (!user?.uid) return;
@@ -255,6 +257,24 @@ useEffect(() => {
 
   return () => unsub();
 }, []);
+useEffect(() => {
+  if (!user?.uid) {
+    setProfile(null);
+    return;
+  }
+
+  const ref = doc(db, "users", user.uid);
+
+  const unsub = onSnapshot(ref, (snap) => {
+    if (snap.exists()) {
+      setProfile(snap.data());
+    } else {
+      setProfile(null);
+    }
+  });
+
+  return () => unsub();
+}, [user?.uid]);
 
   /* ---------------- Projects ---------------- */
   useEffect(() => {
@@ -476,6 +496,35 @@ useEffect(() => {
 
       return data.reply;
     }
+    const generateConversationTitle = async () => {
+  if (!currentId || messages.length === 0) return;
+
+  try {
+    const res = await fetch("/api/law", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category: currentConv?.type === "blog" ? "블로그 상담" : "법률 채팅",
+        messages: messages.map((m) => ({
+          role: m.sender === "user" ? "user" : "assistant",
+          content: m.text,
+        })),
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data?.title) return;
+
+    // 🔥 Firestore 제목 업데이트
+    await updateDoc(
+      doc(db, "users", user.uid, "conversations", currentId),
+      { title: data.title }
+    );
+  } catch (e) {
+    console.error("❌ 제목 생성 실패:", e);
+  }
+};
+
 
     // 2️⃣ 필수 입력값 체크
     const filled =
@@ -532,6 +581,35 @@ useEffect(() => {
 
   return data.reply;
 };
+const generateConversationTitle = useCallback(async () => {
+  if (!user?.uid || !currentId) return;
+
+  // 메시지가 너무 적으면 제목이 이상해져서 최소 2개 이상일 때만 추천
+  if (!messages || messages.length < 2) return;
+
+  try {
+    const res = await fetch("/api/law", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category: currentConv?.type === "blog" ? "블로그" : "채팅",
+        messages: messages.map((m) => ({
+          role: m.sender === "user" ? "user" : "assistant",
+          content: m.text,
+        })),
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data?.title) return;
+
+    await updateDoc(doc(db, "users", user.uid, "conversations", currentId), {
+      title: data.title,
+    });
+  } catch (e) {
+    console.error("❌ generateConversationTitle 실패:", e);
+  }
+}, [user?.uid, currentId, messages, currentConv?.type]);
 
   /* ---------------- Send ---------------- */
  const sendMessage = async (text) => {
@@ -566,29 +644,38 @@ useEffect(() => {
       "⑦ 실제 피해 사례를 중점으로 한 글";
 
     await saveMessage("bot", template);
-    setInput("");
-    resetTextareaHeight();
     return; // ⭐ GPT 호출 안 함
   }
 
   /* ===============================
      3️⃣ GPT 호출
      =============================== */
-  setLoading(true);
-  try {
-    const reply = await requestGpt([
+/* ===============================
+   3️⃣ GPT 호출
+=============================== */
+setLoading(true);
+try {
+  const reply = await requestGpt(
+    [
       ...buildMessagesForApi(),
       { role: "user", content: trimmed },
     ],
-  currentConv.type
+    currentConv.type
   );
 
-    await saveMessage("bot", reply);
-  } finally {
-    setLoading(false);
-    setInput("");
-    resetTextareaHeight();
+  await saveMessage("bot", reply);
+
+  // 🔥 여기 추가 (조건부)
+  if (!currentConv?.title || currentConv.title === "새 상담") {
+    setTimeout(() => {
+      generateConversationTitle();
+    }, 300);
   }
+
+} finally {
+  setLoading(false);
+}
+
 };
 
   /* ---------------- Tone ---------------- */
@@ -782,7 +869,7 @@ if (globalEnabled === false && !isAdmin) {
               : "bg-white dark:bg-[#1a1a1a]"
           }`}
       >
-        <div className="font-semibold text-sm truncate">
+        <div className="font-semibold truncate">
           {conv.title}
         </div>
       </div>
@@ -825,7 +912,7 @@ if (globalEnabled === false && !isAdmin) {
               : "bg-white dark:bg-[#1a1a1a]"
           }`}
       >
-        <div className="font-semibold text-sm truncate">
+        <div className="font-semibold truncate">
           {conv.title || "법률 채팅"}
         </div>
       </div>
@@ -857,10 +944,10 @@ if (globalEnabled === false && !isAdmin) {
                   <img src={p} alt="profile" className="w-5 h-5" />
                 </div>
 
-                <p className="text-xs text-gray-500 dark:text-gray-400 break-all">
-                  {user?.displayName}
+               <p className="text-xs text-gray-500 dark:text-gray-400 break-all">
+  {profile?.name || user?.email || "사용자"}
+</p>
 
-                </p>
               </div>
 {goAdmin && (
   <button
@@ -928,18 +1015,119 @@ if (globalEnabled === false && !isAdmin) {
                 }`}
               >
                 <div
-                  className={`max-w-[70%] px-4 py-3 rounded-2xl shadow text-sm ${
+                  className={`max-w-[70%] px-4 py-3 rounded-2xl shadow  ${
                     m.sender === "user"
                       ? "bg-indigo-600 text-white"
                       : "bg-white dark:bg-neutral-800 dark:text-gray-200"
                   }`}
                 >
-                  <ReactMarkdown
+<ReactMarkdown
   remarkPlugins={[remarkGfm, remarkBreaks]}
-  className="chat-markdown"
+  components={{
+    h1: ({ children }) => (
+      <h1 style={{ fontSize: "1.25rem", fontWeight: 700, margin: "12px 0" }}>
+        {children}
+      </h1>
+    ),
+    h2: ({ children }) => (
+      <h2 style={{ fontSize: "1.1rem", fontWeight: 600, margin: "10px 0" }}>
+        {children}
+      </h2>
+    ),
+    p: ({ children }) => (
+      <p style={{ margin: "4px 0", lineHeight: 1.6 }}>{children}</p>
+    ),
+    ul: ({ children }) => (
+      <ul style={{ paddingLeft: "1.2rem", listStyleType: "disc" }}>
+        {children}
+      </ul>
+    ),
+    ol: ({ children }) => (
+      <ol style={{ paddingLeft: "1.2rem", listStyleType: "decimal" }}>
+        {children}
+      </ol>
+    ),
+    li: ({ children }) => (
+      <li style={{ margin: "2px 0" }}>{children}</li>
+    ),
+    blockquote: ({ children }) => (
+      <blockquote
+        style={{
+          borderLeft: "4px solid #6366f1",
+          paddingLeft: "8px",
+          margin: "8px 0",
+          opacity: 0.85,
+        }}
+      >
+        {children}
+      </blockquote>
+    ),
+    code: ({ inline, children }) =>
+      inline ? (
+        <code
+          style={{
+            background: "#e5e7eb",
+            padding: "2px 4px",
+            borderRadius: "4px",
+            fontSize: "0.85em",
+          }}
+        >
+          {children}
+        </code>
+      ) : (
+        <pre
+          style={{
+            background: "#0f172a",
+            color: "#e5e7eb",
+            padding: "12px",
+            borderRadius: "8px",
+            overflowX: "auto",
+            fontSize: "0.8em",
+          }}
+        >
+          <code>{children}</code>
+        </pre>
+      ),
+    table: ({ children }) => (
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          margin: "8px 0",
+          fontSize: "0.8em",
+        }}
+      >
+        {children}
+      </table>
+    ),
+    th: ({ children }) => (
+      <th
+        style={{
+          border: "1px solid #d1d5db",
+          padding: "4px",
+          background: "#f3f4f6",
+        }}
+      >
+        {children}
+      </th>
+    ),
+    td: ({ children }) => (
+      <td
+        style={{
+          border: "1px solid #d1d5db",
+          padding: "4px",
+        }}
+      >
+        {children}
+      </td>
+    ),
+  }}
 >
   {m.text}
 </ReactMarkdown>
+
+
+
 
                 </div>
               </div>
@@ -947,7 +1135,7 @@ if (globalEnabled === false && !isAdmin) {
 
             {loading && (
               <div className="flex justify-start">
-                <div className="px-4 py-3 text-sm rounded-2xl bg-white dark:bg-neutral-800 shadow">
+                <div className="px-4 py-3 rounded-2xl bg-white dark:bg-neutral-800 shadow">
                   챗봇이 입력 중입니다…
                 </div>
               </div>
@@ -973,7 +1161,14 @@ if (globalEnabled === false && !isAdmin) {
   onKeyDown={(e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage(input);
+
+      const text = input;   // 🔥 현재 입력값 복사
+      setInput("");         // 🔥 먼저 비움
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+
+      sendMessage(text);    // 🔥 그 다음 전송
     }
   }}
   className={`flex-1 border px-4 py-2 rounded-xl resize-none overflow-hidden leading-relaxed dark:border-neutral-600 ${
@@ -989,6 +1184,7 @@ if (globalEnabled === false && !isAdmin) {
       : "먼저 블로그 톤을 선택해주세요"
   }
 />
+
 
 
             <button
