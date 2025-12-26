@@ -19,7 +19,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const OUTPUT_SCHEMA = `
 {
   "title": "string (H1 제목, 제목 형식은 반드시 5.txt의 규칙을 따른다)",
-  "intro": "string (3~5문장, markdown, 도입부 형식은 반드시 1.txt의 A~E 중 정확히 하나만 따른다)",
+  "intro": "string (3~5문장, markdown, 도입부 형식은 반드시 1.txt의 1~5 중 정확히 하나만 따른다)",
   "body": "string (markdown, H2/H3 구조 포함, 본문 전체)",
   "conclusion": "string (markdown, bullet 리스트 포함)",
   "summary_table": "string (markdown table, 글 전체 요약)"
