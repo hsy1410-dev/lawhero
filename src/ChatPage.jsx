@@ -553,13 +553,16 @@ useEffect(() => {
         return "❌ 생성된 글 형식이 올바르지 않습니다.";
       }
 
-      return [
-        `# ${d.title}`,
-        d.intro,
-        d.body,
-        d.conclusion,
-        d.summary_table,
-      ].filter(Boolean).join("\n\n");
+     return [
+  `# ${d.title}`,
+
+  d.intro && `## 도입부\n${d.intro}`,
+  d.body && `## 본문\n${d.body}`,
+  d.conclusion && `## 결론\n${d.conclusion}`,
+  d.summary_table && `## 요약표\n${d.summary_table}`,
+]
+  .filter(Boolean)
+  .join("\n\n");
     }
   }
 
