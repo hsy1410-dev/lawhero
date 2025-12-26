@@ -122,7 +122,7 @@ function ToneModal({ open, onSelect, toneOptions }) {
           {toneOptions.map((t) => (
             <button
               key={t.name}
-              onClick={() => onSelect(t.name)}
+              onClick={() => onSelect(t.key)}
               className="w-full p-4 text-left bg-indigo-600 dark:bg-neutral-700 text-white rounded-xl"
             >
               <div className="font-semibold">{t.name}</div>
@@ -509,7 +509,6 @@ useEffect(() => {
       const r = await fetch("/api/law/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        tone: currentConv?.tone,
         body: JSON.stringify({ messages: msgs }),
       });
 
@@ -599,6 +598,7 @@ useEffect(() => {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages: msgs }),
+    tone: currentConv?.tone,
   });
 
   const data = await r.json();
