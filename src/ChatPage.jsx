@@ -145,7 +145,7 @@ export default function ChatPage({ user,goAdmin, isAdmin }) {
   /* ---------------- State ---------------- */
   const [darkMode, setDarkMode] = useState(false);
   const [toneModal, setToneModal] = useState(false);
-
+const isComposingRef = useRef(false);
   const [projects, setProjects] = useState([]);
   const [currentProjectId, setCurrentProjectId] = useState(null);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -1146,12 +1146,17 @@ if (globalEnabled === false && !isAdmin) {
           <div className="p-4 border-t dark:border-neutral-700 bg-white dark:bg-neutral-900 flex gap-2">
             <textarea
   ref={textareaRef}
-  disabled={
-    currentConv?.type === "blog" && !currentConv?.tone
-  }
   value={input}
+  disabled={currentConv?.type === "blog" && !currentConv?.tone}
+  onCompositionStart={() => {
+    isComposingRef.current = true;
+  }}
+  onCompositionEnd={() => {
+    isComposingRef.current = false;
+  }}
   onChange={(e) => {
     setInput(e.target.value);
+
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height =
@@ -1159,21 +1164,25 @@ if (globalEnabled === false && !isAdmin) {
     }
   }}
   onKeyDown={(e) => {
-  if (e.isComposing) return; // ⭐ 핵심
+    // ⭐ macOS / iOS 한글 입력기 완전 대응
+    if (isComposingRef.current) return;
 
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
 
-    const text = input;
-    setInput("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+      const text = input.trim();
+      setInput("");
+
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+
+      // 🔒 '작' 같은 찌꺼기 전송 방지
+      if (text.length <= 1) return;
+
+      sendMessage(text);
     }
-
-    sendMessage(text);
-  }
-}}
-
+  }}
   className={`flex-1 border px-4 py-2 rounded-xl resize-none overflow-hidden leading-relaxed dark:border-neutral-600 ${
     currentConv?.type === "blog" && !currentConv?.tone
       ? "bg-gray-300 dark:bg-neutral-700 cursor-not-allowed"
