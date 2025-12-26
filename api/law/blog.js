@@ -52,7 +52,7 @@ ex.피해자:이번만 입금하면 정말 돈 받을 수 있나요?
 ex.추가입금 계속 요구해서 다 보냈는데
 저 입금 받을 수 있나요?
 이런 궁금증 해결을 원하신다면 이 글 끝까지 읽어보세요!)",
-  "body": "string (markdown, H2/H3 구조 포함, 본문 전체, 글 쓸 때 마다 글의 구성은 무조건 계속 다르게)",
+  "body": "string (markdown, H2/H3 구조 포함, 본문 전체, 글 쓸 때 마다 글의 구성과 문단 구성 완전히 다르게 해야함)",
   "conclusion": "string (markdown, bullet 리스트 포함)",
   "summary_table": "string (markdown table, 글 전체 요약)"
 }
