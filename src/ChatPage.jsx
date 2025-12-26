@@ -1159,18 +1159,21 @@ if (globalEnabled === false && !isAdmin) {
     }
   }}
   onKeyDown={(e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
+  if (e.isComposing) return; // ⭐ 핵심
 
-      const text = input;   // 🔥 현재 입력값 복사
-      setInput("");         // 🔥 먼저 비움
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
 
-      sendMessage(text);    // 🔥 그 다음 전송
+    const text = input;
+    setInput("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
     }
-  }}
+
+    sendMessage(text);
+  }
+}}
+
   className={`flex-1 border px-4 py-2 rounded-xl resize-none overflow-hidden leading-relaxed dark:border-neutral-600 ${
     currentConv?.type === "blog" && !currentConv?.tone
       ? "bg-gray-300 dark:bg-neutral-700 cursor-not-allowed"
