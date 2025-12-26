@@ -202,17 +202,42 @@ const filteredConversations = useMemo(() => {
     [projects, currentProjectId]
   );
 
-  const toneOptions = useMemo(
-    () => [
-      { name: "전문가 시점(법률 분석)", desc: "법률·판례 기반의 전문 분석." },
-      { name: "경고형 톤", desc: "위험과 주의 메시지를 강조." },
-      { name: "친절한 설명형", desc: "초보도 쉽게 이해할 수 있는 말투." },
-      { name: "뉴스 기사형", desc: "객관적 보도 스타일." },
-      { name: "단호한 대응형", desc: "명확하고 강한 어조." },
-      { name: "부드러운 위로형", desc: "감정 공감 & 위로 중심." },
-    ],
-    []
-  );
+ const toneOptions = useMemo(
+  () => [
+    {
+      key: "expert",
+      name: "전문가 시점(법률 분석)",
+      desc: "법률·판례 기반의 전문 분석.",
+    },
+    {
+      key: "warning",
+      name: "경고형 톤",
+      desc: "위험과 주의 메시지를 강조.",
+    },
+    {
+      key: "friendly",
+      name: "친절한 설명형",
+      desc: "초보도 쉽게 이해할 수 있는 말투.",
+    },
+    {
+      key: "news",
+      name: "뉴스 기사형",
+      desc: "객관적 보도 스타일.",
+    },
+    {
+      key: "firm",
+      name: "단호한 대응형",
+      desc: "명확하고 강한 어조.",
+    },
+    {
+      key: "comfort",
+      name: "부드러운 위로형",
+      desc: "감정 공감 & 위로 중심.",
+    },
+  ],
+  []
+);
+
 
   /* ---------------- Utils ---------------- */
   const resetTextareaHeight = () => {
@@ -484,6 +509,7 @@ useEffect(() => {
       const r = await fetch("/api/law/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        tone: currentConv?.tone,
         body: JSON.stringify({ messages: msgs }),
       });
 
@@ -685,7 +711,7 @@ try {
   const selectTone = async (toneName) => {
     await updateDoc(
       doc(db, "users", user.uid, "conversations", currentId),
-      { tone: toneName }
+      { tone: tone.key }
     );
     setToneModal(false);
 
