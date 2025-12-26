@@ -228,7 +228,7 @@ export default async function handler(req, res) {
     const body =
       typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
 
-    const { messages, category } = body;
+    const { messages, category,tone } = body;
     if (!Array.isArray(messages)) {
       return res.status(400).json({ error: "messages 배열 필요" });
     }
