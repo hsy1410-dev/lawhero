@@ -174,7 +174,7 @@ const isValidOutput = (json) => {
 ========================================================= */
 const requestGPT = async (messages, systemPrompt) => {
   const res = await openai.chat.completions.create({
-    model: "gpt-4.1-mini",
+    model: "gpt-5.2",
     temperature: 0.3,
     max_completion_tokens: 4096, // Chat Completions에서 지원(권장) :contentReference[oaicite:1]{index=1}
     response_format: { type: "json_object" }, // JSON mode :contentReference[oaicite:2]{index=2}
