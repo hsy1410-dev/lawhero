@@ -162,18 +162,21 @@ const isValidOutput = (json) => {
    8. GPT-5.2 호출 (Responses API)
 ========================================================= */
 const requestGPT = async (messages, systemPrompt) => {
-  const res = await openai.responses.create({
-    model: "gpt-5.2",
-    input: [
-      { role: "system", content: systemPrompt },
-      ...messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    ],
-    response_format: { type: "json_object" },
-    max_output_tokens: 4096,
-  });
+const res = await openai.responses.create({
+  model: "gpt-5.2",
+  input: [
+    { role: "system", content: systemPrompt },
+    ...messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    })),
+  ],
+  text: {
+    format: "json", // ✅ 여기!!!
+  },
+  max_output_tokens: 4096,
+});
+
 
   return res.output_text;
 };
