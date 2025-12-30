@@ -170,22 +170,30 @@ const isValidOutput = (json) => {
 };
 
 /* =========================================================
-   7. GPT 호출 (JSON mode 강제)
+   7. GPT 호출 (GPT-5.2 전용 Responses API)
 ========================================================= */
 const requestGPT = async (messages, systemPrompt) => {
-  const res = await openai.chat.completions.create({
+  const res = await openai.responses.create({
     model: "gpt-5.2",
-    temperature: 0.3,
-    max_completion_tokens: 4096, // Chat Completions에서 지원(권장) :contentReference[oaicite:1]{index=1}
-    response_format: { type: "json_object" }, // JSON mode :contentReference[oaicite:2]{index=2}
-    messages: [
-      { role: "system", content: systemPrompt },
-      ...messages,
+    input: [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      ...messages.map(m => ({
+        role: m.role,
+        content: m.content,
+      })),
     ],
+    response_format: {
+      type: "json_object",
+    },
+    max_output_tokens: 4096,
   });
 
-  return res.choices?.[0]?.message?.content ?? "";
+  return res.output_text;
 };
+
 
 /* =========================================================
    8. Handler
@@ -207,7 +215,7 @@ export default async function handler(req, res) {
 
     // ✅ TXT는 요청 시점에 로드 (배포/번들/경로 문제를 여기서 바로 잡음)
     const REF = loadREF();
-    const systemPrompt = buildSystemPrompt(REF, category);
+    const systemPrompt = buildSystemPrompt(REF, category,tone);
 
     let attempt = 0;
     let parsed = null;
