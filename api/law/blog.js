@@ -71,10 +71,10 @@ const OUTPUT_SCHEMA = `
 
 도입부 형식은 구성 선택(1~7)에 따라 자동 결정한다.",
   "body": "string (markdown, H2/H3 구조 포함, 본문 전체,최소 3개의 소제목 포함, 
-   전체 문체는 구성 선택 번호에 따라 일관성 유지
+   전체 문체는 구성 선택 번호에 맞게 글 쓰기
    ,글 쓸 때 마다 글의 구성과 문단의 순서가 완전히 달라야함)",
   "conclusion": "string ( 결론은 ‘요약 → 공감 문장 → 클릭 유도 문장’ 순으로 구성.  )",
-  "summary_table": "string (markdown table, 글 전체 요약, 글 마다 각기 다른 표 구성)"
+  "summary_table": "string (markdown table, 글 전체 요약, 글 마다 각기 다른 구성의 표 구성)"
 }
 `;
 
