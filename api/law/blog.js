@@ -173,7 +173,7 @@ const requestGPT = async (messages, systemPrompt) => {
     ],
     text: {
       format: {
-        type: "json", // ✅ 객체 형태
+        type: "json_object", // ✅ 이것만 가능
       },
     },
     max_output_tokens: 4096,
@@ -181,6 +181,7 @@ const requestGPT = async (messages, systemPrompt) => {
 
   return res.output_text;
 };
+
 
 /* =========================================================
    9. Handler
