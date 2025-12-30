@@ -108,7 +108,7 @@ const loadREF = () => ({
    6. System Prompt Builder
 ========================================================= */
 const buildSystemPrompt = (REF, category, toneKey) => `
-당신은 **10년 이상 경력의 한국 변호사**입니다.
+당신은 **10년 이상 경력의 법률 전문 블로거**입니다.
 아래 JSON 스키마를 **정확히** 따르세요.
 JSON 이외의 출력은 **절대 금지**합니다.
 
