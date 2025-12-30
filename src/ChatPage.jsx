@@ -525,7 +525,7 @@ useEffect(() => {
   if (!currentId || messages.length === 0) return;
 
   try {
-    const res = await fetch("/api/law", {
+    const res = await fetch("/api/law/blog", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
