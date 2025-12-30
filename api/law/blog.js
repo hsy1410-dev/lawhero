@@ -79,20 +79,18 @@ const OUTPUT_SCHEMA = `
 `;
 
 /* =========================================================
-   4. TXT 안전 로드 (요청 시점에 로드 + import.meta.url 기반)
+   5. TXT Loader (안전)
 ========================================================= */
 const readTxtSafe = (filename) => {
-  // 이 파일(/api/law/blog.js) 기준으로 ../../src/txt 를 가리키도록 조정
   const baseDir = new URL("../../src/txt/", import.meta.url);
   const fileUrl = new URL(filename, baseDir);
   const filePath = fileUrl.pathname;
+  const normalized =
+    process.platform === "win32"
+      ? filePath.replace(/^\/([A-Za-z]:)/, "$1")
+      : filePath;
 
-  // Windows 경로 이슈 보정
-  const normalizedPath = process.platform === "win32"
-    ? filePath.replace(/^\/([A-Za-z]:)/, "$1")
-    : filePath;
-
-  return fs.readFileSync(normalizedPath, "utf8");
+  return fs.readFileSync(normalized, "utf8");
 };
 
 const loadREF = () => ({
@@ -104,43 +102,35 @@ const loadREF = () => ({
   t6: readTxtSafe("6.txt"),
   t7: readTxtSafe("7.txt"),
   t8: readTxtSafe("8.txt"),
-  t9: readTxtSafe("9.txt"),
-  t10: readTxtSafe("10.txt"),
-  t11: readTxtSafe("11.txt"),
-  t12: readTxtSafe("12.txt"),
-  t13: readTxtSafe("13.txt"),
-  t14: readTxtSafe("14.txt"),
-  t15: readTxtSafe("15.txt"),
 });
 
 /* =========================================================
-   5. System Prompt
+   6. System Prompt Builder
 ========================================================= */
-const buildSystemPrompt = (REF, category,toneKey) => `
+const buildSystemPrompt = (REF, category, toneKey) => `
 당신은 **10년 이상 경력의 한국 변호사**입니다.
 아래 JSON 스키마를 **정확히** 따르세요.
 JSON 이외의 출력은 **절대 금지**합니다.
 
 ${OUTPUT_SCHEMA}
-# 작성 톤 규칙
+
+# 작성 톤
 ${TONE_PROMPTS[toneKey] || ""}
 
-# 제목 작성 규칙 (5.txt 기준)
+# 제목 규칙 (5.txt)
 ${REF.t5}
 
-# 도입부 형식 규칙 (1.txt 기준)
+# 도입부 규칙 (1.txt)
 ${REF.t1}
 
-------
-# 공통 작성 규칙
-- 모든 값은 markdown 문자열
-- title에는 #을 쓰지 말고 제목 텍스트만 작성
-- intro는 3~5문장 엄수
-- intro 형식은 도입부 형식 지키기!
-- body는 H2/H3 구조 필수, 2,000자 이상으로 글 써야함 필수
-- summary_table은 markdown table 필수
+# 공통 규칙
+- title에는 # 금지
+- intro는 3~5문장
+- body는 H2/H3 구조 + 2,000자 이상
+- summary_table은 markdown table
+- 글 구성은 매번 완전히 다르게
 
-# 참고 지식 (재작성용, 복붙 금지)
+# 참고 지식 (복붙 금지)
 ${REF.t2}
 ${REF.t3}
 ${REF.t4}
@@ -148,55 +138,48 @@ ${REF.t6}
 ${REF.t7}
 ${REF.t8}
 
-
-
 # 사건 유형
 ${category || "일반"}
 
-출력 전에 스스로 검증하고,
-조건을 하나라도 만족하지 못하면 **다시 작성**하라.
-강조**글을 작성할 때 마다 글 구성이 무조건 다르게** 하라
+출력 전 스스로 검증하고
+조건 미달 시 **다시 작성**
 `;
 
 /* =========================================================
-   6. 출력 검증
+   7. Output Validator
 ========================================================= */
 const isValidOutput = (json) => {
-  if (!json) return false;
-  const required = ["title", "intro", "body", "conclusion", "summary_table"];
-  return required.every(
-    (k) => typeof json[k] === "string" && json[k].trim().length > 0
+  const keys = ["title", "intro", "body", "conclusion", "summary_table"];
+  return (
+    json &&
+    keys.every(
+      (k) => typeof json[k] === "string" && json[k].trim().length > 0
+    )
   );
 };
 
 /* =========================================================
-   7. GPT 호출 (GPT-5.2 전용 Responses API)
+   8. GPT-5.2 호출 (Responses API)
 ========================================================= */
 const requestGPT = async (messages, systemPrompt) => {
   const res = await openai.responses.create({
     model: "gpt-5.2",
     input: [
-      {
-        role: "system",
-        content: systemPrompt,
-      },
-      ...messages.map(m => ({
+      { role: "system", content: systemPrompt },
+      ...messages.map((m) => ({
         role: m.role,
         content: m.content,
       })),
     ],
-    response_format: {
-      type: "json_object",
-    },
+    response_format: { type: "json_object" },
     max_output_tokens: 4096,
   });
 
   return res.output_text;
 };
 
-
 /* =========================================================
-   8. Handler
+   9. Handler
 ========================================================= */
 export default async function handler(req, res) {
   try {
@@ -204,40 +187,33 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: "POST only" });
     }
 
-    // ⚠️ 어떤 환경에선 req.body가 string일 수도 있어서 안전 처리
     const body =
-      typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+      typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    const { messages, category,tone } = body;
+    const { messages, category, tone } = body || {};
+
     if (!Array.isArray(messages)) {
       return res.status(400).json({ error: "messages 배열 필요" });
     }
 
-    // ✅ TXT는 요청 시점에 로드 (배포/번들/경로 문제를 여기서 바로 잡음)
     const REF = loadREF();
-    const systemPrompt = buildSystemPrompt(REF, category,tone);
+    const systemPrompt = buildSystemPrompt(REF, category, tone);
 
-    let attempt = 0;
     let parsed = null;
-    let lastRaw = "";
+    let raw = "";
 
-    while (attempt < 2) {
-      attempt++;
-      lastRaw = await requestGPT(messages, systemPrompt);
-
+    for (let i = 0; i < 2; i++) {
+      raw = await requestGPT(messages, systemPrompt);
       try {
-        parsed = JSON.parse(lastRaw);
+        parsed = JSON.parse(raw);
         if (isValidOutput(parsed)) break;
-      } catch (e) {
-        // JSON 파싱 실패 → 재시도
-      }
+      } catch {}
     }
 
-    if (!parsed || !isValidOutput(parsed)) {
-      // 디버깅용: raw 일부를 같이 내려주면 “왜 파싱이 깨지는지” 바로 보임
+    if (!isValidOutput(parsed)) {
       return res.status(500).json({
-        error: "출력 형식 검증 실패 (재시도 후)",
-        debug_raw_preview: String(lastRaw).slice(0, 500),
+        error: "GPT 출력 검증 실패",
+        debug_preview: String(raw).slice(0, 500),
       });
     }
 
