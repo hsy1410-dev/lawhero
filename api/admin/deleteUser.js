@@ -1,4 +1,5 @@
 import admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -12,22 +13,37 @@ if (!admin.apps.length) {
 
 export default async function handler(req, res) {
   try {
+    if (req.method !== "POST") {
+      return res.status(405).end();
+    }
+
     const token = req.headers.authorization?.split("Bearer ")[1];
-    if (!token) return res.status(401).end();
+    if (!token) return res.status(401).json({ error: "no token" });
 
     const decoded = await admin.auth().verifyIdToken(token);
 
     // 🔐 관리자 확인
-    const snap = await admin
+    const adminSnap = await admin
       .firestore()
       .doc(`users/${decoded.uid}`)
       .get();
 
-    if (snap.data()?.role !== "admin") {
+    if (!adminSnap.exists || adminSnap.data()?.role !== "admin") {
       return res.status(403).json({ error: "관리자 아님" });
     }
 
-    const { uid } = req.body;
+    // ✅ body 안전 파싱
+    let body = {};
+    try {
+      body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    } catch {
+      return res.status(400).json({ error: "invalid body" });
+    }
+
+    const { uid } = body;
+    if (!uid) {
+      return res.status(400).json({ error: "uid missing" });
+    }
 
     // 1️⃣ Auth 계정 삭제
     await admin.auth().deleteUser(uid);
@@ -40,11 +56,12 @@ export default async function handler(req, res) {
       adminUid: decoded.uid,
       action: "DELETE_USER",
       targetUid: uid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     res.json({ ok: true });
   } catch (e) {
+    console.error("🔥 deleteUser error:", e);
     res.status(500).json({ error: e.message });
   }
 }
