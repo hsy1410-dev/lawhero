@@ -1,6 +1,12 @@
+// 🔥 반드시 Node runtime 강제
+export const config = {
+  runtime: "nodejs",
+};
+
 import admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
+// 🔥 Admin SDK 초기화 (1회)
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert({
@@ -14,11 +20,18 @@ if (!admin.apps.length) {
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
-      return res.status(405).end();
+      return res.status(405).json({ error: "Method Not Allowed" });
     }
 
-    const token = req.headers.authorization?.split("Bearer ")[1];
-    if (!token) return res.status(401).json({ error: "no token" });
+    // 🔐 토큰 확인
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : null;
+
+    if (!token) {
+      return res.status(401).json({ error: "No token" });
+    }
 
     const decoded = await admin.auth().verifyIdToken(token);
 
@@ -32,15 +45,11 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "관리자 아님" });
     }
 
-    // ✅ body 안전 파싱
-    let body = {};
-    try {
-      body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    } catch {
-      return res.status(400).json({ error: "invalid body" });
-    }
+    // 🔥 body 안전 파싱
+    const body =
+      typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    const { uid } = body;
+    const { uid } = body || {};
     if (!uid) {
       return res.status(400).json({ error: "uid missing" });
     }
@@ -59,9 +68,12 @@ export default async function handler(req, res) {
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    res.json({ ok: true });
+    return res.status(200).json({ ok: true });
   } catch (e) {
-    console.error("🔥 deleteUser error:", e);
-    res.status(500).json({ error: e.message });
+    console.error("🔥 deleteUser fatal error:", e);
+    return res.status(500).json({
+      error: e.message,
+      stack: e.stack, // 🔥 로컬 디버깅용
+    });
   }
 }
