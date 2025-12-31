@@ -16,6 +16,7 @@ export default function AdminPage({ goMain }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [enabled, setEnabled] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState([]);
 
   /* ===============================
      👑 관리자 여부 확인
@@ -45,7 +46,7 @@ export default function AdminPage({ goMain }) {
 
     const ref = doc(db, "system", "globalAccess");
 
-    // ✅ 문서 없으면 최초 생성
+    // 문서 없으면 최초 생성
     getDoc(ref).then((snap) => {
       if (!snap.exists()) {
         setDoc(ref, {
@@ -63,30 +64,71 @@ export default function AdminPage({ goMain }) {
   }, [isAdmin]);
 
   /* ===============================
+     👥 사용자 목록 구독
+     =============================== */
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+      const list = snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
+
+      // 관리자 제외
+      setUsers(list.filter((u) => u.role !== "admin"));
+    });
+
+    return () => unsub();
+  }, [isAdmin]);
+
+  /* ===============================
      🔘 전역 스위치 토글
      =============================== */
-  const toggle = async () => {
+  const toggleGlobal = async () => {
     const user = auth.currentUser;
     if (!user) return;
 
     const ref = doc(db, "system", "globalAccess");
 
-    // 1️⃣ 스위치 변경
     await updateDoc(ref, {
       enabled: !enabled,
       updatedAt: serverTimestamp(),
     });
 
-    // 2️⃣ 관리자 로그 기록
-  await addDoc(collection(db, "adminLogs"), {
-  adminUid: user.uid,
-  adminEmail: user.email,
-  action: "GLOBAL_ACCESS_TOGGLE",
-  before: enabled,
-  after: !enabled,
-  createdAt: serverTimestamp(),
-});
+    await addDoc(collection(db, "adminLogs"), {
+      adminUid: user.uid,
+      adminEmail: user.email,
+      action: "GLOBAL_ACCESS_TOGGLE",
+      before: enabled,
+      after: !enabled,
+      createdAt: serverTimestamp(),
+    });
+  };
 
+  /* ===============================
+     ❌ 사용자 삭제
+     =============================== */
+  const deleteUser = async (uid) => {
+    if (!window.confirm("정말 이 사용자를 삭제할까요?")) return;
+
+    const token = await auth.currentUser.getIdToken();
+
+    const res = await fetch("/api/admin/deleteUser", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ uid }),
+    });
+
+    if (!res.ok) {
+      alert("삭제 실패");
+      return;
+    }
+
+    alert("사용자 삭제 완료");
   };
 
   /* ===============================
@@ -121,13 +163,14 @@ export default function AdminPage({ goMain }) {
      =============================== */
   return (
     <div className="w-screen h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-[360px] text-center">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-[380px] text-center">
         <h1 className="text-2xl font-bold mb-4">🛠 관리자 패널</h1>
 
-        <p className="mb-6 text-gray-600">전체 사용자 접근 상태</p>
+        {/* 전역 접근 스위치 */}
+        <p className="mb-3 text-gray-600">전체 사용자 접근 상태</p>
 
         <button
-          onClick={toggle}
+          onClick={toggleGlobal}
           className={`w-full py-3 rounded-xl text-white font-semibold transition ${
             enabled ? "bg-green-600" : "bg-red-600"
           }`}
@@ -135,9 +178,37 @@ export default function AdminPage({ goMain }) {
           {enabled ? "ACTIVE (전체 허용)" : "PENDING (전체 차단)"}
         </button>
 
-        <p className="mt-4 text-xs text-gray-400">
+        <p className="mt-3 text-xs text-gray-400">
           스위치 변경 시 모든 사용자에게 즉시 반영됩니다.
         </p>
+
+        {/* 사용자 관리 */}
+        <div className="mt-6 text-left">
+          <h2 className="font-bold mb-2">👥 사용자 관리</h2>
+
+          <ul className="space-y-2 max-h-48 overflow-y-auto">
+            {users.map((u) => (
+              <li
+                key={u.id}
+                className="flex justify-between items-center bg-gray-100 px-3 py-2 rounded"
+              >
+                <div>
+                  <p className="text-sm font-semibold">{u.email}</p>
+                  <p className="text-xs text-gray-500">
+                    상태: {u.role ?? "user"}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => deleteUser(u.id)}
+                  className="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+                >
+                  삭제
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
 
         {goMain && (
           <button
