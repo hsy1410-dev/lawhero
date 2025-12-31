@@ -10,26 +10,46 @@ import {
   addDoc,
   collection,
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function AdminPage({ goMain }) {
+  const [authReady, setAuthReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [enabled, setEnabled] = useState(null);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
 
   /* ===============================
+     🔐 Auth 준비 완료 대기 (🔥 핵심)
+     =============================== */
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setAuthReady(true);
+      } else {
+        setAuthReady(false);
+        setLoading(false);
+      }
+    });
+
+    return () => unsub();
+  }, []);
+
+  /* ===============================
      👑 관리자 여부 확인
      =============================== */
   useEffect(() => {
-    const checkRole = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
+    if (!authReady) return;
 
+    const checkRole = async () => {
       try {
+        const user = auth.currentUser;
+        if (!user) {
+          setIsAdmin(false);
+          setLoading(false);
+          return;
+        }
+
         const snap = await getDoc(doc(db, "users", user.uid));
         setIsAdmin(snap.exists() && snap.data()?.role === "admin");
       } catch (e) {
@@ -41,13 +61,13 @@ export default function AdminPage({ goMain }) {
     };
 
     checkRole();
-  }, []);
+  }, [authReady]);
 
   /* ===============================
      🌍 전역 접근 스위치 구독 (읽기 전용)
      =============================== */
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!authReady || !isAdmin) return;
 
     const ref = doc(db, "system", "globalAccess");
 
@@ -64,13 +84,13 @@ export default function AdminPage({ goMain }) {
     );
 
     return () => unsub();
-  }, [isAdmin]);
+  }, [authReady, isAdmin]);
 
   /* ===============================
      👥 사용자 목록 구독
      =============================== */
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!authReady || !isAdmin) return;
 
     const unsub = onSnapshot(
       collection(db, "users"),
@@ -89,7 +109,7 @@ export default function AdminPage({ goMain }) {
     );
 
     return () => unsub();
-  }, [isAdmin]);
+  }, [authReady, isAdmin]);
 
   /* ===============================
      🔘 전역 스위치 토글
@@ -147,10 +167,10 @@ export default function AdminPage({ goMain }) {
   /* ===============================
      ⛔ 접근 제어
      =============================== */
-  if (loading) {
+  if (loading || !authReady) {
     return (
       <div className="w-screen h-screen flex items-center justify-center">
-        로딩 중…
+        인증 확인 중…
       </div>
     );
   }
