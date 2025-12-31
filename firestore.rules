@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ===============================
+       🔐 공통 함수
+       =============================== */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    /* ===============================
+       👤 사용자 데이터
+       =============================== */
+    match /users/{userId} {
+
+      // 본인: read / write
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+
+      // 관리자: 모든 사용자 read 가능
+      allow read: if isAdmin();
+
+      /* ---------- 프로젝트 ---------- */
+      match /projects/{projectId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      /* ---------- 대화 ---------- */
+      match /conversations/{convId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+
+        match /messages/{msgId} {
+          allow read, write: if isSignedIn() && request.auth.uid == userId;
+        }
+      }
+    }
+
+    /* ===============================
+       🌍 전역 접근 제어
+       =============================== */
+    match /system/globalAccess {
+
+      // 로그인한 사용자: 상태 조회
+      allow read: if isSignedIn();
+
+      // 관리자만 변경 가능
+      allow write: if isAdmin();
+    }
+
+    /* ===============================
+       🧾 관리자 로그
+       =============================== */
+    match /adminLogs/{logId} {
+
+      // 관리자만 조회
+      allow read: if isAdmin();
+
+      // 관리자만 생성
+      allow create: if isAdmin();
+
+      // 수정 / 삭제 금지
+      allow update, delete: if false;
+    }
+
+    /* ===============================
+       🚫 그 외 전부 차단
+       =============================== */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

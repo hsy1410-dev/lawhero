@@ -146,7 +146,7 @@ export default function AdminPage({ goMain }) {
     try {
       const token = await auth.currentUser.getIdToken();
 
-      const res = await fetch("/api/admin/deleteUser", {
+      const res = await fetch("https://us-central1-lawhero-35bd7.cloudfunctions.net/deleteUser", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
