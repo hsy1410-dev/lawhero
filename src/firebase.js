@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   getAuth,
   setPersistence,
-  inMemoryPersistence,
+  browserLocalPersistence,
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -15,14 +15,13 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// ✅ Firebase App 싱글톤 보장 (🔥 핵심)
+// ✅ 싱글톤 보장
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// ✅ Auth / Firestore 동일 app 사용
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// ✅ persistence 설정 (선택)
-setPersistence(auth, inMemoryPersistence);
+// 🔥 핵심: 인증 상태를 브라우저에 유지
+setPersistence(auth, browserLocalPersistence);
 
-console.log("🔥 Connected Firebase Project ID:", app.options.projectId);
+console.log("🔥 Firebase ready:", app.options.projectId);
