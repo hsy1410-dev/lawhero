@@ -5,7 +5,6 @@ import {
   doc,
   onSnapshot,
   updateDoc,
-  setDoc,
   serverTimestamp,
   getDoc,
   addDoc,
@@ -30,35 +29,39 @@ export default function AdminPage({ goMain }) {
         return;
       }
 
-      const snap = await getDoc(doc(db, "users", user.uid));
-      setIsAdmin(snap.exists() && snap.data()?.role === "admin");
-      setLoading(false);
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        setIsAdmin(snap.exists() && snap.data()?.role === "admin");
+      } catch (e) {
+        console.error("🔥 admin check error:", e);
+        setIsAdmin(false);
+      } finally {
+        setLoading(false);
+      }
     };
 
     checkRole();
   }, []);
 
   /* ===============================
-     🌍 전역 접근 스위치 구독
+     🌍 전역 접근 스위치 구독 (읽기 전용)
      =============================== */
   useEffect(() => {
     if (!isAdmin) return;
 
     const ref = doc(db, "system", "globalAccess");
 
-    // 문서 없으면 최초 생성
-    getDoc(ref).then((snap) => {
-      if (!snap.exists()) {
-        setDoc(ref, {
-          enabled: true,
-          updatedAt: serverTimestamp(),
-        });
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          setEnabled(snap.data().enabled);
+        }
+      },
+      (err) => {
+        console.error("🔥 globalAccess error:", err);
       }
-    });
-
-    const unsub = onSnapshot(ref, (snap) => {
-      setEnabled(snap.data()?.enabled ?? true);
-    });
+    );
 
     return () => unsub();
   }, [isAdmin]);
@@ -69,15 +72,21 @@ export default function AdminPage({ goMain }) {
   useEffect(() => {
     if (!isAdmin) return;
 
-    const unsub = onSnapshot(collection(db, "users"), (snap) => {
-      const list = snap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
+    const unsub = onSnapshot(
+      collection(db, "users"),
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
 
-      // 관리자 제외
-      setUsers(list.filter((u) => u.role !== "admin"));
-    });
+        // 관리자 계정 제외
+        setUsers(list.filter((u) => u.role !== "admin"));
+      },
+      (err) => {
+        console.error("🔥 users snapshot error:", err);
+      }
+    );
 
     return () => unsub();
   }, [isAdmin]);
@@ -86,24 +95,26 @@ export default function AdminPage({ goMain }) {
      🔘 전역 스위치 토글
      =============================== */
   const toggleGlobal = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
+    try {
+      const ref = doc(db, "system", "globalAccess");
 
-    const ref = doc(db, "system", "globalAccess");
+      await updateDoc(ref, {
+        enabled: !enabled,
+        updatedAt: serverTimestamp(),
+      });
 
-    await updateDoc(ref, {
-      enabled: !enabled,
-      updatedAt: serverTimestamp(),
-    });
-
-    await addDoc(collection(db, "adminLogs"), {
-      adminUid: user.uid,
-      adminEmail: user.email,
-      action: "GLOBAL_ACCESS_TOGGLE",
-      before: enabled,
-      after: !enabled,
-      createdAt: serverTimestamp(),
-    });
+      await addDoc(collection(db, "adminLogs"), {
+        adminUid: auth.currentUser.uid,
+        adminEmail: auth.currentUser.email,
+        action: "GLOBAL_ACCESS_TOGGLE",
+        before: enabled,
+        after: !enabled,
+        createdAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.error("🔥 toggle error:", e);
+      alert("전역 스위치 변경 실패");
+    }
   };
 
   /* ===============================
@@ -112,23 +123,25 @@ export default function AdminPage({ goMain }) {
   const deleteUser = async (uid) => {
     if (!window.confirm("정말 이 사용자를 삭제할까요?")) return;
 
-    const token = await auth.currentUser.getIdToken();
+    try {
+      const token = await auth.currentUser.getIdToken();
 
-    const res = await fetch("/api/admin/deleteUser", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ uid }),
-    });
+      const res = await fetch("/api/admin/deleteUser", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ uid }),
+      });
 
-    if (!res.ok) {
+      if (!res.ok) throw new Error("API 실패");
+
+      alert("사용자 삭제 완료");
+    } catch (e) {
+      console.error("🔥 delete user error:", e);
       alert("삭제 실패");
-      return;
     }
-
-    alert("사용자 삭제 완료");
   };
 
   /* ===============================
@@ -166,7 +179,6 @@ export default function AdminPage({ goMain }) {
       <div className="bg-white p-8 rounded-2xl shadow-xl w-[380px] text-center">
         <h1 className="text-2xl font-bold mb-4">🛠 관리자 패널</h1>
 
-        {/* 전역 접근 스위치 */}
         <p className="mb-3 text-gray-600">전체 사용자 접근 상태</p>
 
         <button
