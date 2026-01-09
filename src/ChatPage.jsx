@@ -541,127 +541,17 @@ useEffect(() => {
       }
     );
   };
-
-  /* ---------------- GPT ---------------- */
- const requestGpt = async (msgs, type) => {
-  const last = msgs[msgs.length - 1]?.content?.trim();
-
-  /* ===============================
-     📝 블로그 전용
-     =============================== */
-  if (type === "blog") {
-    // 1️⃣ 시작 트리거
-    if (last === "시작") {
-      const r = await fetch("/api/law/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: msgs }),
-      });
-
-      const data = await r.json();
-
-      if (!r.ok) {
-        console.error("❌ /law/start error:", data);
-        return "❌ 블로그 작성을 시작할 수 없습니다.";
-      }
-
-      return data.reply;
-    }
-    const generateConversationTitle = async () => {
-  if (!currentId || messages.length === 0) return;
-
-  try {
-    const res = await fetch("/api/law/blog", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        category: currentConv?.type === "blog" ? "블로그 상담" : "법률 채팅",
-        messages: messages.map((m) => ({
-          role: m.sender === "user" ? "user" : "assistant",
-          content: m.text,
-        })),
-      }),
-    });
-
-    const data = await res.json();
-    if (!res.ok || !data?.title) return;
-
-    // 🔥 Firestore 제목 업데이트
-    await updateDoc(
-      doc(db, "users", user.uid, "conversations", currentId),
-      { title: data.title }
-    );
-  } catch (e) {
-    console.error("❌ 제목 생성 실패:", e);
-  }
-};
-
-
-    // 2️⃣ 필수 입력값 체크
-    const filled =
-      /✅키워드:\s*\S+/i.test(last) ||
-      /✅사기내용:\s*\S+/i.test(last) ||
-      /✅구성선택:\s*[1-7]/i.test(last);
-
-    if (filled) {
-      const r = await fetch("/api/law/blog", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-  messages: msgs,
-  category: "블로그 상담",
-  tone: currentConv?.tone, // ⭐ 필수
-}),
-      });
-
-      const d = await r.json();
-
-      // ⭐⭐⭐ 여기 핵심 ⭐⭐⭐
-   if (!r.ok) {
-  console.error("❌ /law/blog status:", r.status);
-  console.error("❌ /law/blog raw:", raw); // ✅ 여기로 서버 에러 본문 확인
-  return "❌ 글 생성에 실패했습니다. 서버 오류(500).";
-}
-
-      // 3️⃣ 안전 가드 (undefined 방지)
-      if (!d?.title || !d?.body) {
-        console.error("❌ invalid blog response:", d);
-        return "❌ 생성된 글 형식이 올바르지 않습니다.";
-      }
-
-     return [
-  `# ${d.title}`,
-
-  d.intro && `## 도입부\n${d.intro}`,
-  d.body && `## 본문\n${d.body}`,
-  d.conclusion && `## 결론\n${d.conclusion}`,
-  d.summary_table && `## 요약표\n${d.summary_table}`,
-]
-  .filter(Boolean)
-  .join("\n\n");
-    }
-  }
-
-  /* ===============================
-     💬 일반 채팅
-     =============================== */
-  const generateConversationTitle = useCallback(async () => {
+   const generateConversationTitle = useCallback(async () => {
   if (!user?.uid || !currentId) return;
-
-  // currentConv가 없으면 안전하게 종료
   if (!currentConv) return;
-
-  // 메시지가 너무 적으면 제목이 이상해져서 최소 2개 이상일 때만
   if (!messages || messages.length < 2) return;
 
-  // ✅ 채팅은 서버 호출하지 말고 클라이언트에서 제목 생성 (가장 안정적)
+  // 채팅이면 서버 안 부르고 간단 제목(원하면 삭제 가능)
   if (currentConv.type !== "blog") {
     const firstUserMsg =
       messages.find((m) => m.sender === "user")?.text?.trim() || "법률 채팅";
-
-    const title = firstUserMsg.length > 18
-      ? firstUserMsg.slice(0, 18) + "…"
-      : firstUserMsg;
+    const title =
+      firstUserMsg.length > 18 ? firstUserMsg.slice(0, 18) + "…" : firstUserMsg;
 
     try {
       await updateDoc(doc(db, "users", user.uid, "conversations", currentId), {
@@ -673,7 +563,6 @@ useEffect(() => {
     return;
   }
 
-  // ✅ 블로그만 /api/law/blog에서 title 받기
   try {
     const res = await fetch("/api/law/blog", {
       method: "POST",
@@ -685,8 +574,7 @@ useEffect(() => {
           role: m.sender === "user" ? "user" : "assistant",
           content: m.text,
         })),
-        // 서버가 지원하면 title만 생성하도록 플래그를 추가해도 됨:
-        // mode: "title",
+        // mode: "title", // 서버가 지원하면 켜기
       }),
     });
 
@@ -694,7 +582,7 @@ useEffect(() => {
     let data = null;
     try {
       data = JSON.parse(raw);
-    } catch {
+    } catch (e) {
       data = null;
     }
 
@@ -712,8 +600,106 @@ useEffect(() => {
   } catch (e) {
     console.error("❌ generateConversationTitle 실패:", e);
   }
-}, [user?.uid, currentId, messages, currentConv]);
+}, [user?.uid, currentId, messages, currentConv?.type, currentConv?.tone]);
 
+  /* ---------------- GPT ---------------- */
+ const requestGpt = async (msgs, type) => {
+  const last = msgs[msgs.length - 1]?.content?.trim();
+
+  // 📝 블로그 전용
+  if (type === "blog") {
+    // 시작 트리거
+    if (last === "시작") {
+      const r = await fetch("/api/law/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: msgs }),
+      });
+
+      const raw = await r.text();
+      let data = null;
+      try { data = JSON.parse(raw); } catch {}
+
+      if (!r.ok) {
+        console.error("❌ /law/start status:", r.status);
+        console.error("❌ /law/start raw:", raw);
+        return "❌ 블로그 작성을 시작할 수 없습니다.";
+      }
+
+      return data?.reply ?? "❌ 응답 형식 오류";
+    }
+
+    // 필수 입력 체크
+    const filled =
+      /✅키워드:\s*\S+/i.test(last) ||
+      /✅사기내용:\s*\S+/i.test(last) ||
+      /✅구성선택:\s*[1-7]/i.test(last);
+
+    if (filled) {
+      const r = await fetch("/api/law/blog", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: msgs,
+          category: "블로그 상담",
+          tone: currentConv?.tone ?? "expert",
+        }),
+      });
+
+      const raw = await r.text();
+      let d = null;
+      try { d = JSON.parse(raw); } catch {}
+
+      if (!r.ok) {
+        console.error("❌ /law/blog status:", r.status);
+        console.error("❌ /law/blog raw:", raw);
+        return "❌ 글 생성에 실패했습니다. 서버 오류(500).";
+      }
+
+      if (!d?.title || !d?.body) {
+        console.error("❌ invalid blog response:", d);
+        return "❌ 생성된 글 형식이 올바르지 않습니다.";
+      }
+
+      return [
+        `# ${d.title}`,
+        d.intro && `## 도입부\n${d.intro}`,
+        d.body && `## 본문\n${d.body}`,
+        d.conclusion && `## 결론\n${d.conclusion}`,
+        d.summary_table && `## 요약표\n${d.summary_table}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+
+    // filled 아닐 때는 그냥 안내
+    return "✅ 아래 형식으로 입력해주세요:\n✅키워드:\n✅사기내용:\n✅구성선택:";
+  }
+
+  // 💬 일반 채팅
+  const r = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messages: msgs,
+      tone: currentConv?.tone ?? "friendly",
+    }),
+  });
+
+  const raw = await r.text();
+  let data = null;
+  try { data = JSON.parse(raw); } catch {}
+
+  if (!r.ok) {
+    console.error("❌ /chat status:", r.status);
+    console.error("❌ /chat raw:", raw);
+    return "❌ 응답을 불러오지 못했습니다.";
+  }
+
+  return data?.reply ?? "❌ 응답 형식 오류";
+};
+
+  
   /* ---------------- Send ---------------- */
  const sendMessage = async (text) => {
   if (!text.trim() || loading) return;
@@ -750,9 +736,6 @@ useEffect(() => {
     return; // ⭐ GPT 호출 안 함
   }
 
-  /* ===============================
-     3️⃣ GPT 호출
-     =============================== */
 /* ===============================
    3️⃣ GPT 호출
 =============================== */
@@ -1313,4 +1296,4 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
       )}
     </div>
   </div>
-);}}
+);}
