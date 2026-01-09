@@ -10,7 +10,6 @@ export default function Signup({ goLogin }) {
   const [pwCheck, setPwCheck] = useState("");
   const [error, setError] = useState("");
 
-  // 🔐 비밀번호 조건 (내부 검증용)
   const isValidPassword =
     pw.length >= 8 &&
     /[a-z]/.test(pw) &&
@@ -19,34 +18,38 @@ export default function Signup({ goLogin }) {
     /[@$!%*?&^#()\-_=+[\]{};:'",.<>/\\|`~]/.test(pw);
 
   const handleSignup = async () => {
-    if (!name.trim()) {
-      return setError("이름을 입력해주세요.");
-    }
-
-    if (pw !== pwCheck) {
-      return setError("비밀번호가 일치하지 않습니다.");
-    }
-
-    if (!isValidPassword) {
-      return setError("비밀번호 형식이 올바르지 않습니다.");
-    }
+    if (!name.trim()) return setError("이름을 입력해주세요.");
+    if (!email.trim()) return setError("이메일을 입력해주세요.");
+    if (pw !== pwCheck) return setError("비밀번호가 일치하지 않습니다.");
+    if (!isValidPassword) return setError("비밀번호 형식이 올바르지 않습니다.");
 
     try {
       setError("");
 
-      // 1️⃣ Firebase Auth 계정 생성
-      const cred = await createUserWithEmailAndPassword(auth, email, pw);
+      const cleanEmail = email.trim().toLowerCase();
+
+      // 1) Auth 생성
+      const cred = await createUserWithEmailAndPassword(auth, cleanEmail, pw);
       const uid = cred.user.uid;
 
-      // 2️⃣ Firestore 사용자 문서 생성 (role = pending)
-      await setDoc(doc(db, "users", uid), {
-        name: name.trim(),
-        email,
-        role: "pending", // 🔒 기본 권한
-        createdAt: serverTimestamp(),
-      });
+      // 2) Firestore users 문서 생성 (규칙에 맞게)
+      await setDoc(
+        doc(db, "users", uid),
+        {
+          name: name.trim(),
+          email: cleanEmail,
+          role: "pending",
+          createdAt: serverTimestamp(),
+          hasInitialized: true,
+        },
+        { merge: true }
+      );
+
+      // 여기서 원하는 화면 이동이 있으면 추가 (예: goLogin())
+      // goLogin?.();
 
     } catch (err) {
+      console.error(err);
       setError("이미 존재하는 계정이거나 입력 형식이 올바르지 않습니다.");
     }
   };
@@ -58,7 +61,6 @@ export default function Signup({ goLogin }) {
           회원가입
         </h1>
 
-        {/* 👤 이름 */}
         <input
           type="text"
           placeholder="이름"
@@ -67,7 +69,6 @@ export default function Signup({ goLogin }) {
           className="w-full p-3 border rounded mb-3 dark:bg-neutral-800 dark:text-white"
         />
 
-        {/* 📧 이메일 */}
         <input
           type="email"
           placeholder="이메일"
@@ -76,7 +77,6 @@ export default function Signup({ goLogin }) {
           className="w-full p-3 border rounded mb-3 dark:bg-neutral-800 dark:text-white"
         />
 
-        {/* 🔐 비밀번호 */}
         <input
           type="password"
           placeholder="비밀번호 (8자 이상, 대/소문자·숫자·특수문자 포함)"
@@ -85,7 +85,6 @@ export default function Signup({ goLogin }) {
           className="w-full p-3 border rounded mb-3 dark:bg-neutral-800 dark:text-white"
         />
 
-        {/* 🔐 비밀번호 확인 */}
         <input
           type="password"
           placeholder="비밀번호 확인"
@@ -94,11 +93,7 @@ export default function Signup({ goLogin }) {
           className="w-full p-3 border rounded mb-3 dark:bg-neutral-800 dark:text-white"
         />
 
-        {error && (
-          <p className="text-red-500 text-sm mb-2 text-center">
-            {error}
-          </p>
-        )}
+        {error && <p className="text-red-500 text-sm mb-2 text-center">{error}</p>}
 
         <button
           onClick={handleSignup}
