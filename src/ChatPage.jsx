@@ -142,6 +142,37 @@ export default function ChatPage({ user,goAdmin, isAdmin }) {
   const textareaRef = useRef(null);
   const chatRef = useRef(null);
 
+  const [role, setRole] = useState(null);  // ✅ 추가
+  const [roleLoading, setRoleLoading] = useState(true); // ✅ 추가
+
+  // ✅ 내 users 문서 구독해서 role 가져오기
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) {
+      setRole(null);
+      setRoleLoading(false);
+      return;
+    }
+
+    const unsub = onSnapshot(
+      doc(db, "users", user.uid),
+      (snap) => {
+        if (snap.exists()) {
+          setRole(snap.data()?.role ?? "pending");
+        } else {
+          // users 문서가 아직 없으면 안전하게 pending 처리
+          setRole("pending");
+        }
+        setRoleLoading(false);
+      },
+      () => {
+        setRole("pending");
+        setRoleLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, []);
   /* ---------------- State ---------------- */
   const [darkMode, setDarkMode] = useState(false);
   const [toneModal, setToneModal] = useState(false);
