@@ -617,10 +617,11 @@ useEffect(() => {
       const d = await r.json();
 
       // ⭐⭐⭐ 여기 핵심 ⭐⭐⭐
-      if (!r.ok) {
-        console.error("❌ /law/blog error:", d);
-        return "❌ 글 생성에 실패했습니다. 입력 내용을 다시 확인해주세요.";
-      }
+   if (!r.ok) {
+  console.error("❌ /law/blog status:", r.status);
+  console.error("❌ /law/blog raw:", raw); // ✅ 여기로 서버 에러 본문 확인
+  return "❌ 글 생성에 실패했습니다. 서버 오류(500).";
+}
 
       // 3️⃣ 안전 가드 (undefined 방지)
       if (!d?.title || !d?.body) {
@@ -644,44 +645,66 @@ useEffect(() => {
   /* ===============================
      💬 일반 채팅
      =============================== */
-  const r = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: msgs ,
-      tone: currentConv?.tone,}),
-    
-  });
-
-  const data = await r.json();
-
-  if (!r.ok) {
-    console.error("❌ /chat error:", data);
-    return "❌ 응답을 불러오지 못했습니다.";
-  }
-
-  return data.reply;
-};
-const generateConversationTitle = useCallback(async () => {
+  const generateConversationTitle = useCallback(async () => {
   if (!user?.uid || !currentId) return;
 
-  // 메시지가 너무 적으면 제목이 이상해져서 최소 2개 이상일 때만 추천
+  // currentConv가 없으면 안전하게 종료
+  if (!currentConv) return;
+
+  // 메시지가 너무 적으면 제목이 이상해져서 최소 2개 이상일 때만
   if (!messages || messages.length < 2) return;
 
+  // ✅ 채팅은 서버 호출하지 말고 클라이언트에서 제목 생성 (가장 안정적)
+  if (currentConv.type !== "blog") {
+    const firstUserMsg =
+      messages.find((m) => m.sender === "user")?.text?.trim() || "법률 채팅";
+
+    const title = firstUserMsg.length > 18
+      ? firstUserMsg.slice(0, 18) + "…"
+      : firstUserMsg;
+
+    try {
+      await updateDoc(doc(db, "users", user.uid, "conversations", currentId), {
+        title,
+      });
+    } catch (e) {
+      console.error("❌ 채팅 제목 업데이트 실패:", e);
+    }
+    return;
+  }
+
+  // ✅ 블로그만 /api/law/blog에서 title 받기
   try {
-    const res = await fetch("/api/law", {
+    const res = await fetch("/api/law/blog", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        category: currentConv?.type === "blog" ? "블로그" : "채팅",
+        category: "블로그",
+        tone: currentConv?.tone ?? "expert",
         messages: messages.map((m) => ({
           role: m.sender === "user" ? "user" : "assistant",
           content: m.text,
         })),
+        // 서버가 지원하면 title만 생성하도록 플래그를 추가해도 됨:
+        // mode: "title",
       }),
     });
 
-    const data = await res.json();
-    if (!res.ok || !data?.title) return;
+    const raw = await res.text();
+    let data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+
+    if (!res.ok) {
+      console.error("❌ title api status:", res.status);
+      console.error("❌ title api raw:", raw);
+      return;
+    }
+
+    if (!data?.title) return;
 
     await updateDoc(doc(db, "users", user.uid, "conversations", currentId), {
       title: data.title,
@@ -689,7 +712,7 @@ const generateConversationTitle = useCallback(async () => {
   } catch (e) {
     console.error("❌ generateConversationTitle 실패:", e);
   }
-}, [user?.uid, currentId, messages, currentConv?.type]);
+}, [user?.uid, currentId, messages, currentConv]);
 
   /* ---------------- Send ---------------- */
  const sendMessage = async (text) => {
@@ -1290,4 +1313,4 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
       )}
     </div>
   </div>
-);}
+);}}
