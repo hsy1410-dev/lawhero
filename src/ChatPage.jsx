@@ -305,14 +305,29 @@ useEffect(() => {
     chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages, loading, showIntroTyping]);
 useEffect(() => {
+  // role 로딩 중이면 대기
+  if (roleLoading) return;
+
+  // pending이면 globalAccess를 읽지 말고 바로 차단될 거니까 기본값 아무거나 둬도 됨
+  if (role === "pending" && !isAdmin) return;
+
   const ref = doc(db, "system", "globalAccess");
 
-  const unsub = onSnapshot(ref, (snap) => {
-    setGlobalEnabled(snap.exists() ? snap.data()?.enabled : true);
-  });
+  const unsub = onSnapshot(
+    ref,
+    (snap) => {
+      setGlobalEnabled(snap.exists() ? !!snap.data()?.enabled : true);
+    },
+    (err) => {
+      console.error("globalAccess snapshot error:", err);
+      // 권한 에러면 안전하게 막는 값으로 두는 게 좋음
+      setGlobalEnabled(false);
+    }
+  );
 
   return () => unsub();
-}, []);
+}, [roleLoading, role, isAdmin]);
+
 useEffect(() => {
   if (!user?.uid) {
     setProfile(null);
@@ -765,7 +780,7 @@ const openProjectModal = (project) => {
   setProjectModalOpen(true);
 };
 
-if ((!globalEnabled || userRole === "pending") && !isAdmin) {
+if ((!globalEnabled || role === "pending") && !isAdmin) {
   return (
     <div className="w-screen h-screen flex items-center justify-center bg-black text-white">
       ⛔ 서비스 점검 중입니다
