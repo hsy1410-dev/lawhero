@@ -20,7 +20,7 @@ export default function AdminPage({ goMain }) {
   const [users, setUsers] = useState([]);
 
   /* ===============================
-     🔐 Auth 준비 완료 대기 (🔥 핵심)
+     🔐 Auth 준비 완료 대기
      =============================== */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -31,7 +31,6 @@ export default function AdminPage({ goMain }) {
         setLoading(false);
       }
     });
-
     return () => unsub();
   }, []);
 
@@ -64,24 +63,18 @@ export default function AdminPage({ goMain }) {
   }, [authReady]);
 
   /* ===============================
-     🌍 전역 접근 스위치 구독 (읽기 전용)
+     🌍 전역 접근 스위치 구독
      =============================== */
   useEffect(() => {
     if (!authReady || !isAdmin) return;
 
     const ref = doc(db, "system", "globalAccess");
 
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (snap.exists()) {
-          setEnabled(snap.data().enabled);
-        }
-      },
-      (err) => {
-        console.error("🔥 globalAccess error:", err);
+    const unsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        setEnabled(snap.data().enabled);
       }
-    );
+    });
 
     return () => unsub();
   }, [authReady, isAdmin]);
@@ -92,27 +85,21 @@ export default function AdminPage({ goMain }) {
   useEffect(() => {
     if (!authReady || !isAdmin) return;
 
-    const unsub = onSnapshot(
-      collection(db, "users"),
-      (snap) => {
-        const list = snap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
+    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+      const list = snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
 
-        // 관리자 계정 제외
-        setUsers(list.filter((u) => u.role !== "admin"));
-      },
-      (err) => {
-        console.error("🔥 users snapshot error:", err);
-      }
-    );
+      // 관리자 제외
+      setUsers(list.filter((u) => u.role !== "admin"));
+    });
 
     return () => unsub();
   }, [authReady, isAdmin]);
 
   /* ===============================
-     🔘 전역 스위치 토글
+     🔘 전역 접근 토글
      =============================== */
   const toggleGlobal = async () => {
     try {
@@ -138,6 +125,33 @@ export default function AdminPage({ goMain }) {
   };
 
   /* ===============================
+     ✅ 사용자 승인 (pending → active)
+     =============================== */
+  const approveUser = async (uid) => {
+    if (!window.confirm("이 사용자를 승인하시겠습니까?")) return;
+
+    try {
+      await updateDoc(doc(db, "users", uid), {
+        role: "active",
+        approvedAt: serverTimestamp(),
+      });
+
+      await addDoc(collection(db, "adminLogs"), {
+        adminUid: auth.currentUser.uid,
+        adminEmail: auth.currentUser.email,
+        action: "USER_APPROVE",
+        targetUid: uid,
+        createdAt: serverTimestamp(),
+      });
+
+      alert("✅ 사용자 승인 완료");
+    } catch (e) {
+      console.error("🔥 approve error:", e);
+      alert("승인 실패");
+    }
+  };
+
+  /* ===============================
      ❌ 사용자 삭제
      =============================== */
   const deleteUser = async (uid) => {
@@ -146,14 +160,17 @@ export default function AdminPage({ goMain }) {
     try {
       const token = await auth.currentUser.getIdToken();
 
-      const res = await fetch("https://us-central1-lawhero-35bd7.cloudfunctions.net/deleteUser", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ uid }),
-      });
+      const res = await fetch(
+        "https://us-central1-lawhero-35bd7.cloudfunctions.net/deleteUser",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ uid }),
+        }
+      );
 
       if (!res.ok) throw new Error("API 실패");
 
@@ -196,11 +213,11 @@ export default function AdminPage({ goMain }) {
      =============================== */
   return (
     <div className="w-screen h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-[380px] text-center">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-[420px] text-center">
         <h1 className="text-2xl font-bold mb-4">🛠 관리자 패널</h1>
 
+        {/* 전역 접근 */}
         <p className="mb-3 text-gray-600">전체 사용자 접근 상태</p>
-
         <button
           onClick={toggleGlobal}
           className={`w-full py-3 rounded-xl text-white font-semibold transition ${
@@ -218,7 +235,7 @@ export default function AdminPage({ goMain }) {
         <div className="mt-6 text-left">
           <h2 className="font-bold mb-2">👥 사용자 관리</h2>
 
-          <ul className="space-y-2 max-h-48 overflow-y-auto">
+          <ul className="space-y-2 max-h-56 overflow-y-auto">
             {users.map((u) => (
               <li
                 key={u.id}
@@ -227,16 +244,27 @@ export default function AdminPage({ goMain }) {
                 <div>
                   <p className="text-sm font-semibold">{u.email}</p>
                   <p className="text-xs text-gray-500">
-                    상태: {u.role ?? "user"}
+                    상태: {u.role}
                   </p>
                 </div>
 
-                <button
-                  onClick={() => deleteUser(u.id)}
-                  className="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
-                >
-                  삭제
-                </button>
+                <div className="flex gap-2">
+                  {u.role === "pending" && (
+                    <button
+                      onClick={() => approveUser(u.id)}
+                      className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
+                    >
+                      승인
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => deleteUser(u.id)}
+                    className="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+                  >
+                    삭제
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
