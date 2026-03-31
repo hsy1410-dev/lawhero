@@ -45,13 +45,26 @@ exports.deleteUser = functions.https.onRequest(async (req, res) => {
       return res.status(403).json({ error: "관리자 아님" });
     }
 
-    const { uid } = req.body;
+    const body =
+      typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+
+    const { uid } = body || {};
     if (!uid) {
       return res.status(400).json({ error: "uid missing" });
     }
 
-    // 1️⃣ Auth 계정 삭제
-    await admin.auth().deleteUser(uid);
+    if (uid === decoded.uid) {
+      return res.status(400).json({ error: "자기 자신은 삭제할 수 없습니다." });
+    }
+
+    // Auth 계정이 이미 없더라도 Firestore 정리는 계속 진행한다.
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (error) {
+      if (error?.code !== "auth/user-not-found") {
+        throw error;
+      }
+    }
 
     // 2️⃣ Firestore 문서 삭제
     await admin.firestore().doc(`users/${uid}`).delete();
