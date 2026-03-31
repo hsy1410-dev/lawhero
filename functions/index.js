@@ -3,17 +3,21 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
+function setCorsHeaders(res) {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Max-Age", "3600");
+}
+
 /**
  * 🔥 관리자 전용 사용자 삭제
  * POST /deleteUser
  */
 exports.deleteUser = functions.https.onRequest(async (req, res) => {
-  try {
-    // CORS (Vite에서 호출용)
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  setCorsHeaders(res);
 
+  try {
     if (req.method === "OPTIONS") {
       return res.status(204).send("");
     }
