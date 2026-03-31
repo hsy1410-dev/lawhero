@@ -13,8 +13,10 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 
 const DELETE_USER_URL =
-  import.meta.env.VITE_DELETE_USER_URL ??
-  "https://us-central1-lawhero-35bd7.cloudfunctions.net/deleteUser";
+  import.meta.env.PROD
+    ? "/api/admin/deleteUser"
+    : import.meta.env.VITE_DELETE_USER_URL?.trim() ||
+      "https://us-central1-lawhero-35bd7.cloudfunctions.net/deleteUser";
 
 export default function AdminPage({ goMain }) {
   const [authReady, setAuthReady] = useState(false);
