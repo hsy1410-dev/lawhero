@@ -78,6 +78,16 @@ export default function App() {
      🌍 Global Access 구독 (핵심)
      =============================== */
   useEffect(() => {
+    if (loadingUser) return;
+
+    if (!user?.uid) {
+      setGlobalEnabled(true);
+      setLoadingGlobal(false);
+      return;
+    }
+
+    setLoadingGlobal(true);
+
     const ref = doc(db, "system", "globalAccess");
 
     const unsub = onSnapshot(
@@ -100,7 +110,7 @@ export default function App() {
     );
 
     return () => unsub();
-  }, []);
+  }, [loadingUser, user?.uid]);
 
   /* ===============================
      ⏳ 전역 로딩
