@@ -12,6 +12,10 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
+const DELETE_USER_URL =
+  import.meta.env.VITE_DELETE_USER_URL ??
+  "https://us-central1-lawhero-35bd7.cloudfunctions.net/deleteUser";
+
 export default function AdminPage({ goMain }) {
   const [authReady, setAuthReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -160,24 +164,34 @@ export default function AdminPage({ goMain }) {
     try {
       const token = await auth.currentUser.getIdToken();
 
-      const res = await fetch(
-        "https://us-central1-lawhero-35bd7.cloudfunctions.net/deleteUser",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ uid }),
-        }
-      );
+      const res = await fetch(DELETE_USER_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ uid }),
+      });
 
-      if (!res.ok) throw new Error("API 실패");
+      const raw = await res.text();
+      let payload = null;
+
+      try {
+        payload = raw ? JSON.parse(raw) : null;
+      } catch {
+        payload = null;
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          payload?.error || `삭제 API 실패 (${res.status})`
+        );
+      }
 
       alert("사용자 삭제 완료");
     } catch (e) {
       console.error("🔥 delete user error:", e);
-      alert("삭제 실패");
+      alert(`삭제 실패: ${e.message}`);
     }
   };
 
