@@ -258,7 +258,9 @@ export default function AdminPage({ goMain }) {
                 className="flex justify-between items-center bg-gray-100 px-3 py-2 rounded"
               >
                 <div>
-                  <p className="text-sm font-semibold">{u.email}</p>
+                  <p className="text-sm font-semibold">
+                    {u.name?.trim() || "이름 없음"}
+                  </p>
                   <p className="text-xs text-gray-500">
                     상태: {u.role}
                   </p>
