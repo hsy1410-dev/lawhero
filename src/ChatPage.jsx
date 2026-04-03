@@ -135,6 +135,48 @@ function ToneModal({ open, onSelect, toneOptions }) {
   );
 }
 
+function SidebarToggleButton({ collapsed, onClick, className = "" }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`
+        flex h-10 w-10 items-center justify-center rounded-xl border
+        border-[#d1d5db] bg-white text-gray-600 shadow-sm transition hover:bg-gray-100
+        dark:border-[#3a3a3a] dark:bg-[#1a1a1a] dark:text-gray-200 dark:hover:bg-[#222]
+        ${className}
+      `}
+      aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
+      title={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-5 w-5"
+        aria-hidden="true"
+      >
+        <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+        <path d="M9 4.5v15" />
+        {collapsed ? (
+          <>
+            <path d="M13 12h4" />
+            <path d="m15 10 2 2-2 2" />
+          </>
+        ) : (
+          <>
+            <path d="M17 12h-4" />
+            <path d="m15 10-2 2 2 2" />
+          </>
+        )}
+      </svg>
+    </button>
+  );
+}
+
 /* ---------------------------------------------------------
    ■ 메인
 --------------------------------------------------------- */
@@ -813,28 +855,21 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
       {toneModal && <div className="absolute inset-0 bg-black/20 z-20" />}
       <ToneModal open={toneModal} onSelect={selectTone} toneOptions={toneOptions} />
 
+      {sidebarCollapsed && (
+        <SidebarToggleButton
+          collapsed
+          onClick={() => setSidebarCollapsed(false)}
+          className="absolute left-4 top-4 z-10"
+        />
+      )}
+
       <div className="flex flex-1 min-w-0">
         {/* Sidebar (생략 없이 기존과 동일한 구조 사용 가능) */}
         <div
-          className="relative shrink-0 transition-all duration-300 ease-in-out"
-          style={{ width: sidebarCollapsed ? "3.5rem" : "18rem" }}
+          className="relative shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out"
+          style={{ width: sidebarCollapsed ? "0rem" : "18rem" }}
+          aria-hidden={sidebarCollapsed}
         >
-          <button
-            type="button"
-            onClick={() => setSidebarCollapsed((prev) => !prev)}
-            className="
-              absolute top-5 -right-3 z-20
-              flex h-7 w-7 items-center justify-center rounded-full border
-              border-[#d1d5db] bg-white text-sm font-semibold text-gray-600 shadow-md
-              transition hover:bg-gray-100
-              dark:border-[#3a3a3a] dark:bg-[#1a1a1a] dark:text-gray-200 dark:hover:bg-[#222]
-            "
-            aria-label={sidebarCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
-            title={sidebarCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
-          >
-            {sidebarCollapsed ? ">" : "<"}
-          </button>
-
           <aside
             className="
               h-full border-r flex flex-col overflow-hidden
@@ -842,48 +877,7 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
               dark:bg-[#111] dark:text-gray-200 dark:border-[#2a2a2a]
             "
           >
-            {sidebarCollapsed ? (
-              <div className="flex h-full flex-col items-center justify-between py-4">
-                <button
-                  type="button"
-                  onClick={() => setDarkMode(!darkMode)}
-                  className="
-                    flex h-10 w-10 items-center justify-center rounded-xl
-                    bg-[#e5e7eb] text-[#111]
-                    dark:bg-[#2a2a2a] dark:text-gray-200
-                  "
-                  aria-label={darkMode ? "라이트 모드" : "다크 모드"}
-                  title={darkMode ? "라이트 모드" : "다크 모드"}
-                >
-                  <img
-                    src={darkMode ? sun : moon}
-                    alt="theme"
-                    className="w-5 h-5"
-                  />
-                </button>
-
-                <div
-                  className="
-                    flex h-10 w-10 items-center justify-center rounded-xl
-                    bg-[#ffffff] border border-[#e5e7eb]
-                    dark:bg-[#1a1a1a] dark:border-[#2f2f2f]
-                  "
-                >
-                  <img src={book} alt="menu" className="w-5 h-5" />
-                </div>
-
-                <div
-                  className="
-                    flex h-10 w-10 items-center justify-center rounded-full
-                    bg-[#e5e7eb] text-[#111]
-                    dark:bg-[#2a2a2a] dark:text-gray-200
-                  "
-                >
-                  <img src={p} alt="profile" className="w-5 h-5" />
-                </div>
-              </div>
-            ) : (
-              <>
+            <>
                 <div
                   className="
                     p-4 pb-3 border-b sticky top-0 z-10
@@ -891,22 +885,29 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
                     dark:bg-[#111] dark:border-[#2a2a2a]
                   "
                 >
-                  <button
-                    onClick={() => setDarkMode(!darkMode)}
-                    className="
-                      mb-4 w-full px-4 py-2 rounded-lg
-                      flex items-center justify-center gap-2
-                      bg-[#e5e7eb] text-[#111] hover:bg-[#dcdfe3]
-                      dark:bg-[#2a2a2a] dark:text-gray-200 dark:hover:bg-[#333]
-                    "
-                  >
-                    <img
-                      src={darkMode ? sun : moon}
-                      alt="theme"
-                      className="w-5 h-5"
+                  <div className="mb-4 flex items-center gap-2">
+                    <SidebarToggleButton
+                      collapsed={false}
+                      onClick={() => setSidebarCollapsed(true)}
+                      className="shrink-0"
                     />
-                    <span>{darkMode ? "라이트 모드" : "다크 모드"}</span>
-                  </button>
+                    <button
+                      onClick={() => setDarkMode(!darkMode)}
+                      className="
+                        flex-1 px-4 py-2 rounded-lg
+                        flex items-center justify-center gap-2
+                        bg-[#e5e7eb] text-[#111] hover:bg-[#dcdfe3]
+                        dark:bg-[#2a2a2a] dark:text-gray-200 dark:hover:bg-[#333]
+                      "
+                    >
+                      <img
+                        src={darkMode ? sun : moon}
+                        alt="theme"
+                        className="w-5 h-5"
+                      />
+                      <span>{darkMode ? "라이트 모드" : "다크 모드"}</span>
+                    </button>
+                  </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
@@ -1129,7 +1130,6 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
                   </div>
                 </div>
               </>
-            )}
           </aside>
         </div>
 
@@ -1148,21 +1148,45 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
         </main>
       ) : (
         <main className="flex-1 min-w-0 flex flex-col bg-gray-50 dark:bg-black">
-          <header className="p-4 border-b dark:border-neutral-700 bg-white dark:bg-neutral-900">
-            <h1 className="text-xl font-semibold dark:text-white">LAW HERO</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {user.email} 님
-            </p>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-              {currentProject
-                ? `프로젝트: ${currentProject.name} / 상담: ${currentConv.title}`
-                : `프로젝트 없음 / 상담: ${currentConv.title}`}
-            </p>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-              {currentConv?.type === "blog"
-                ? `선택 톤: ${currentToneLabel}`
-                : `모드: ${currentToneLabel}`}
-            </p>
+          <header className="border-b bg-white dark:border-neutral-700 dark:bg-neutral-900">
+            <div
+              className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between ${
+                sidebarCollapsed ? "pl-16 sm:pl-20" : ""
+              }`}
+            >
+              <div className="min-w-0">
+                <h1 className="text-xl font-semibold dark:text-white">
+                  LAW HERO
+                </h1>
+                <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">
+                  {user?.email || "사용자"} 님
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-600 dark:bg-neutral-800 dark:text-gray-300">
+                  {currentProject
+                    ? `프로젝트 ${currentProject.name}`
+                    : "프로젝트 없음"}
+                </span>
+                <span className="max-w-full rounded-full bg-gray-100 px-3 py-1 text-gray-600 dark:bg-neutral-800 dark:text-gray-300">
+                  <span className="block max-w-[220px] truncate">
+                    상담 {currentConv.title}
+                  </span>
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1 ${
+                    currentConv?.type === "blog"
+                      ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                  }`}
+                >
+                  {currentConv?.type === "blog"
+                    ? `톤 ${currentToneLabel}`
+                    : `모드 ${currentToneLabel}`}
+                </span>
+              </div>
+            </div>
           </header>
 
           {/* Messages */}
