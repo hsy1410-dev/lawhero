@@ -175,6 +175,7 @@ export default function ChatPage({ user,goAdmin, isAdmin }) {
   }, []);
   /* ---------------- State ---------------- */
   const [darkMode, setDarkMode] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [toneModal, setToneModal] = useState(false);
 const isComposingRef = useRef(false);
   const [projects, setProjects] = useState([]);
@@ -268,6 +269,15 @@ const filteredConversations = useMemo(() => {
   ],
   []
 );
+  const currentToneLabel = useMemo(() => {
+    if (!currentConv) return "";
+    if (currentConv.type !== "blog") return "일반 채팅";
+
+    return (
+      toneOptions.find((tone) => tone.key === currentConv.tone)?.name ||
+      "미선택"
+    );
+  }, [currentConv, toneOptions]);
 
 
   /* ---------------- Utils ---------------- */
@@ -803,260 +813,330 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
       {toneModal && <div className="absolute inset-0 bg-black/20 z-20" />}
       <ToneModal open={toneModal} onSelect={selectTone} toneOptions={toneOptions} />
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 min-w-0">
         {/* Sidebar (생략 없이 기존과 동일한 구조 사용 가능) */}
-          <aside
-          className="
-            w-72 border-r flex flex-col
-            bg-[#f8f9fa] text-[#111] border-[#e5e7eb]
-            dark:bg-[#111] dark:text-gray-200 dark:border-[#2a2a2a]
-          "
+        <div
+          className="relative shrink-0 transition-all duration-300 ease-in-out"
+          style={{ width: sidebarCollapsed ? "3.5rem" : "18rem" }}
         >
-          <div
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed((prev) => !prev)}
             className="
-              p-4 pb-3 border-b sticky top-0 z-10
-              bg-[#f8f9fa] border-[#e5e7eb]
-              dark:bg-[#111] dark:border-[#2a2a2a]
+              absolute top-5 -right-3 z-20
+              flex h-7 w-7 items-center justify-center rounded-full border
+              border-[#d1d5db] bg-white text-sm font-semibold text-gray-600 shadow-md
+              transition hover:bg-gray-100
+              dark:border-[#3a3a3a] dark:bg-[#1a1a1a] dark:text-gray-200 dark:hover:bg-[#222]
+            "
+            aria-label={sidebarCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
+            title={sidebarCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
+          >
+            {sidebarCollapsed ? ">" : "<"}
+          </button>
+
+          <aside
+            className="
+              h-full border-r flex flex-col overflow-hidden
+              bg-[#f8f9fa] text-[#111] border-[#e5e7eb]
+              dark:bg-[#111] dark:text-gray-200 dark:border-[#2a2a2a]
             "
           >
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="
-                mb-4 w-full px-4 py-2 rounded-lg
-                flex items-center justify-center gap-2
-                bg-[#e5e7eb] text-[#111] hover:bg-[#dcdfe3]
-                dark:bg-[#2a2a2a] dark:text-gray-200 dark:hover:bg-[#333]
-              "
-            >
-              <img src={darkMode ? sun : moon} alt="theme" className="w-5 h-5" />
-              <span>{darkMode ? "라이트 모드" : "다크 모드"}</span>
-            </button>
-
-            <div>
-              <div className="flex items-center justify-between mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
-                <span>프로젝트</span>
+            {sidebarCollapsed ? (
+              <div className="flex h-full flex-col items-center justify-between py-4">
                 <button
-                  onClick={addProject}
+                  type="button"
+                  onClick={() => setDarkMode(!darkMode)}
                   className="
-                    text-[11px] px-2 py-1 rounded border
-                    bg-[#f0f0f0] text-[#444] border-[#ddd]
-                    dark:bg-[#1f1f1f] dark:text-gray-300 dark:border-[#3a3a3a]
+                    flex h-10 w-10 items-center justify-center rounded-xl
+                    bg-[#e5e7eb] text-[#111]
+                    dark:bg-[#2a2a2a] dark:text-gray-200
                   "
+                  aria-label={darkMode ? "라이트 모드" : "다크 모드"}
+                  title={darkMode ? "라이트 모드" : "다크 모드"}
                 >
-                  + 새 프로젝트
+                  <img
+                    src={darkMode ? sun : moon}
+                    alt="theme"
+                    className="w-5 h-5"
+                  />
                 </button>
-              </div>
 
-              <button
-                onClick={() => setCurrentProjectId(null)}
-                className={`
-                  w-full text-left text-xs px-3 py-2 mb-1 rounded-lg border transition
-                  flex items-center gap-2
-                  ${
-                    currentProjectId === null
-                      ? `
-                        bg-[#e5e7eb] border-[#cbd5e1] text-[#111]
-                        dark:bg-[#2a2a2a] dark:border-[#555] dark:text-white
-                      `
-                      : `
-                        bg-[#ffffff] border-[#e5e7eb] text-gray-600 hover:bg-[#f3f3f3]
-                        dark:bg-[#1a1a1a] dark:border-[#2f2f2f] dark:text-gray-300
-                        dark:hover:bg-[#222]
-                      `
-                  }
-                `}
-              >
-                <img src={book} alt="all" className="w-4 h-4 shrink-0" />
-                <span>전체 상담 보기</span>
-              </button>
-
-              <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 mt-1">
-                {projects.map((pjt) => {
-                  const selected = pjt.id === currentProjectId;
-                  const color = pjt.color || "#6366f1";
-
-                  return (
-                    <div key={pjt.id} className="group relative">
-                      <button
-                        onClick={() => setCurrentProjectId(pjt.id)}
-                        className="
-                          w-full flex items-center gap-2 p-3 rounded-lg border transition text-left
-                          bg-[#ffffff] text-[#111] hover:bg-[#f3f3f3]
-                          dark:bg-[#1a1a1a] dark:text-gray-300 dark:hover:bg-[#222]
-                        "
-                        style={{ borderColor: selected ? color : "transparent" }}
-                      >
-                        <img src={img1} alt="proj" className="w-4 h-4 shrink-0" />
-                        <span className="font-semibold text-sm truncate">
-                          {pjt.name}
-                        </span>
-                      </button>
-
-                      <div
-                        className="
-                          absolute right-2 top-1/2 -translate-y-1/2
-                          flex gap-1 opacity-0 group-hover:opacity-100 transition
-                        "
-                      >
-                        <button
-                          onClick={() => openProjectModal(pjt)}
-                          className="
-                            text-[10px] px-2 py-1 rounded border
-                            bg-white text-gray-700 border-gray-300
-                            dark:bg-[#1f1f1f] dark:text-gray-300 dark:border-[#3a3a3a]
-                          "
-                        >
-                          수정
-                        </button>
-                        <button
-                          onClick={() => deleteProject(pjt.id)}
-                          className="
-                            text-[10px] px-2 py-1 rounded border
-                            bg-red-100 text-red-700 border-red-300
-                            dark:bg-red-900/40 dark:text-red-300 dark:border-red-900/60
-                          "
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 pt-3">
-            {/* ===============================
-    📝 상담 (블로그)
-=============================== */}
-<div className="mb-6">
-  <div className="flex items-center justify-between mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
-    <span>상담</span>
-    <button
-      onClick={addConversation}
-      className="text-[11px] px-2 py-1 rounded border bg-[#e5e7eb] dark:bg-[#333]"
-    >
-      + 새 상담
-    </button>
-  </div>
-
- {filteredConversations
-  .filter((c) => c.type === "blog")
-  .map((conv) => (
-    <div key={conv.id} className="flex items-center gap-2 mb-1">
-      <div
-        onClick={() => setCurrentId(conv.id)}
-        className={`flex-1 p-3 rounded-lg border cursor-pointer
-          ${
-            currentId === conv.id
-              ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30"
-              : "bg-white dark:bg-[#1a1a1a]"
-          }`}
-      >
-        <div className="font-semibold truncate">
-          {conv.title}
-        </div>
-      </div>
-
-      {/* ❌ 삭제 */}
-      <button
-        onClick={() => deleteConversation(conv.id)}
-        className="text-[10px] px-2 py-1 rounded border
-          bg-red-100 text-red-700 border-red-300
-          dark:bg-red-900/40 dark:text-red-300 dark:border-red-900/60"
-      >
-        삭제
-      </button>
-    </div>
-  ))}
-
-    
-</div>
-<div className="mb-6">
-  <div className="flex items-center justify-between mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
-    <span>채팅</span>
-    <button
-      onClick={addChatConversation}
-      className="text-[11px] px-2 py-1 rounded border bg-[#e5e7eb] dark:bg-[#333]"
-    >
-      + 새 채팅
-    </button>
-  </div>
-
-{filteredConversations
-  .filter((c) => c.type === "chat")
-  .map((conv) => (
-    <div key={conv.id} className="flex items-center gap-2 mb-1">
-      <div
-        onClick={() => setCurrentId(conv.id)}
-        className={`flex-1 p-3 rounded-lg border cursor-pointer
-          ${
-            currentId === conv.id
-              ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30"
-              : "bg-white dark:bg-[#1a1a1a]"
-          }`}
-      >
-        <div className="font-semibold truncate">
-          {conv.title || "법률 채팅"}
-        </div>
-      </div>
-
-      {/* ❌ 삭제 */}
-      <button
-        onClick={() => deleteConversation(conv.id)}
-        className="text-[10px] px-2 py-1 rounded border
-          bg-red-100 text-red-700 border-red-300
-          dark:bg-red-900/40 dark:text-red-300 dark:border-red-900/60"
-      >
-        삭제
-      </button>
-    </div>
-  ))}
-
-</div>
-
-
-            <div className="mt-6 border-t pt-4 border-[#e5e7eb] dark:border-[#2a2a2a]">
-              <div className="flex items-center gap-3 mb-4">
                 <div
                   className="
-                    w-9 h-9 rounded-full flex items-center justify-center
+                    flex h-10 w-10 items-center justify-center rounded-xl
+                    bg-[#ffffff] border border-[#e5e7eb]
+                    dark:bg-[#1a1a1a] dark:border-[#2f2f2f]
+                  "
+                >
+                  <img src={book} alt="menu" className="w-5 h-5" />
+                </div>
+
+                <div
+                  className="
+                    flex h-10 w-10 items-center justify-center rounded-full
                     bg-[#e5e7eb] text-[#111]
                     dark:bg-[#2a2a2a] dark:text-gray-200
                   "
                 >
                   <img src={p} alt="profile" className="w-5 h-5" />
                 </div>
-
-               <p className="text-xs text-gray-500 dark:text-gray-400 break-all">
-  {profile?.name || user?.email || "사용자"}
-</p>
-
               </div>
-{goAdmin && (
-  <button
-    onClick={goAdmin}
-    className="w-full mb-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition"
-  >
-    🛠 관리자 페이지
-  </button>
-)}
+            ) : (
+              <>
+                <div
+                  className="
+                    p-4 pb-3 border-b sticky top-0 z-10
+                    bg-[#f8f9fa] border-[#e5e7eb]
+                    dark:bg-[#111] dark:border-[#2a2a2a]
+                  "
+                >
+                  <button
+                    onClick={() => setDarkMode(!darkMode)}
+                    className="
+                      mb-4 w-full px-4 py-2 rounded-lg
+                      flex items-center justify-center gap-2
+                      bg-[#e5e7eb] text-[#111] hover:bg-[#dcdfe3]
+                      dark:bg-[#2a2a2a] dark:text-gray-200 dark:hover:bg-[#333]
+                    "
+                  >
+                    <img
+                      src={darkMode ? sun : moon}
+                      alt="theme"
+                      className="w-5 h-5"
+                    />
+                    <span>{darkMode ? "라이트 모드" : "다크 모드"}</span>
+                  </button>
 
-              <button
-                onClick={() => signOut(auth)}
-                className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition"
-              >
-                로그아웃
-              </button>
-            </div>
-          </div>
-        </aside>
+                  <div>
+                    <div className="flex items-center justify-between mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      <span>프로젝트</span>
+                      <button
+                        onClick={addProject}
+                        className="
+                          text-[11px] px-2 py-1 rounded border
+                          bg-[#f0f0f0] text-[#444] border-[#ddd]
+                          dark:bg-[#1f1f1f] dark:text-gray-300 dark:border-[#3a3a3a]
+                        "
+                      >
+                        + 새 프로젝트
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentProjectId(null)}
+                      className={`
+                        w-full text-left text-xs px-3 py-2 mb-1 rounded-lg border transition
+                        flex items-center gap-2
+                        ${
+                          currentProjectId === null
+                            ? `
+                              bg-[#e5e7eb] border-[#cbd5e1] text-[#111]
+                              dark:bg-[#2a2a2a] dark:border-[#555] dark:text-white
+                            `
+                            : `
+                              bg-[#ffffff] border-[#e5e7eb] text-gray-600 hover:bg-[#f3f3f3]
+                              dark:bg-[#1a1a1a] dark:border-[#2f2f2f] dark:text-gray-300
+                              dark:hover:bg-[#222]
+                            `
+                        }
+                      `}
+                    >
+                      <img src={book} alt="all" className="w-4 h-4 shrink-0" />
+                      <span>전체 상담 보기</span>
+                    </button>
+
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 mt-1">
+                      {projects.map((pjt) => {
+                        const selected = pjt.id === currentProjectId;
+                        const color = pjt.color || "#6366f1";
+
+                        return (
+                          <div key={pjt.id} className="group relative">
+                            <button
+                              onClick={() => setCurrentProjectId(pjt.id)}
+                              className="
+                                w-full flex items-center gap-2 p-3 rounded-lg border transition text-left
+                                bg-[#ffffff] text-[#111] hover:bg-[#f3f3f3]
+                                dark:bg-[#1a1a1a] dark:text-gray-300 dark:hover:bg-[#222]
+                              "
+                              style={{
+                                borderColor: selected ? color : "transparent",
+                              }}
+                            >
+                              <img
+                                src={img1}
+                                alt="proj"
+                                className="w-4 h-4 shrink-0"
+                              />
+                              <span className="font-semibold text-sm truncate">
+                                {pjt.name}
+                              </span>
+                            </button>
+
+                            <div
+                              className="
+                                absolute right-2 top-1/2 -translate-y-1/2
+                                flex gap-1 opacity-0 group-hover:opacity-100 transition
+                              "
+                            >
+                              <button
+                                onClick={() => openProjectModal(pjt)}
+                                className="
+                                  text-[10px] px-2 py-1 rounded border
+                                  bg-white text-gray-700 border-gray-300
+                                  dark:bg-[#1f1f1f] dark:text-gray-300 dark:border-[#3a3a3a]
+                                "
+                              >
+                                수정
+                              </button>
+                              <button
+                                onClick={() => deleteProject(pjt.id)}
+                                className="
+                                  text-[10px] px-2 py-1 rounded border
+                                  bg-red-100 text-red-700 border-red-300
+                                  dark:bg-red-900/40 dark:text-red-300 dark:border-red-900/60
+                                "
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 pt-3">
+                  {/* ===============================
+    📝 상담 (블로그)
+=============================== */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      <span>상담</span>
+                      <button
+                        onClick={addConversation}
+                        className="text-[11px] px-2 py-1 rounded border bg-[#e5e7eb] dark:bg-[#333]"
+                      >
+                        + 새 상담
+                      </button>
+                    </div>
+
+                    {filteredConversations
+                      .filter((c) => c.type === "blog")
+                      .map((conv) => (
+                        <div key={conv.id} className="flex items-center gap-2 mb-1">
+                          <div
+                            onClick={() => setCurrentId(conv.id)}
+                            className={`flex-1 p-3 rounded-lg border cursor-pointer
+                              ${
+                                currentId === conv.id
+                                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30"
+                                  : "bg-white dark:bg-[#1a1a1a]"
+                              }`}
+                          >
+                            <div className="font-semibold truncate">
+                              {conv.title}
+                            </div>
+                          </div>
+
+                          {/* ❌ 삭제 */}
+                          <button
+                            onClick={() => deleteConversation(conv.id)}
+                            className="text-[10px] px-2 py-1 rounded border
+                              bg-red-100 text-red-700 border-red-300
+                              dark:bg-red-900/40 dark:text-red-300 dark:border-red-900/60"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      <span>채팅</span>
+                      <button
+                        onClick={addChatConversation}
+                        className="text-[11px] px-2 py-1 rounded border bg-[#e5e7eb] dark:bg-[#333]"
+                      >
+                        + 새 채팅
+                      </button>
+                    </div>
+
+                    {filteredConversations
+                      .filter((c) => c.type === "chat")
+                      .map((conv) => (
+                        <div key={conv.id} className="flex items-center gap-2 mb-1">
+                          <div
+                            onClick={() => setCurrentId(conv.id)}
+                            className={`flex-1 p-3 rounded-lg border cursor-pointer
+                              ${
+                                currentId === conv.id
+                                  ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30"
+                                  : "bg-white dark:bg-[#1a1a1a]"
+                              }`}
+                          >
+                            <div className="font-semibold truncate">
+                              {conv.title || "법률 채팅"}
+                            </div>
+                          </div>
+
+                          {/* ❌ 삭제 */}
+                          <button
+                            onClick={() => deleteConversation(conv.id)}
+                            className="text-[10px] px-2 py-1 rounded border
+                              bg-red-100 text-red-700 border-red-300
+                              dark:bg-red-900/40 dark:text-red-300 dark:border-red-900/60"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+
+                  <div className="mt-6 border-t pt-4 border-[#e5e7eb] dark:border-[#2a2a2a]">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div
+                        className="
+                          w-9 h-9 rounded-full flex items-center justify-center
+                          bg-[#e5e7eb] text-[#111]
+                          dark:bg-[#2a2a2a] dark:text-gray-200
+                        "
+                      >
+                        <img src={p} alt="profile" className="w-5 h-5" />
+                      </div>
+
+                      <p className="text-xs text-gray-500 dark:text-gray-400 break-all">
+                        {profile?.name || user?.email || "사용자"}
+                      </p>
+                    </div>
+                    {goAdmin && (
+                      <button
+                        onClick={goAdmin}
+                        className="w-full mb-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition"
+                      >
+                        🛠 관리자 페이지
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => signOut(auth)}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition"
+                    >
+                      로그아웃
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </aside>
+        </div>
 
         {/* … 필요 시 이전 답변의 사이드바 JSX 그대로 붙여도 됩니다 … */}
       {/* 오른쪽 메인 */}
       {!currentConv ? (
-        <main className="flex-1 flex flex-col items-center justify-center bg-gray-50 dark:bg-black text-center px-4">
+        <main className="flex-1 min-w-0 flex flex-col items-center justify-center bg-gray-50 dark:bg-black text-center px-4">
           <h2 className="text-2xl font-semibold dark:text-white mb-3">
             상담을 선택하거나 새로 만들어주세요
           </h2>
@@ -1067,7 +1147,7 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
           </p>
         </main>
       ) : (
-        <main className="flex-1 flex flex-col bg-gray-50 dark:bg-black">
+        <main className="flex-1 min-w-0 flex flex-col bg-gray-50 dark:bg-black">
           <header className="p-4 border-b dark:border-neutral-700 bg-white dark:bg-neutral-900">
             <h1 className="text-xl font-semibold dark:text-white">LAW HERO</h1>
             <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -1077,6 +1157,11 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
               {currentProject
                 ? `프로젝트: ${currentProject.name} / 상담: ${currentConv.title}`
                 : `프로젝트 없음 / 상담: ${currentConv.title}`}
+            </p>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+              {currentConv?.type === "blog"
+                ? `선택 톤: ${currentToneLabel}`
+                : `모드: ${currentToneLabel}`}
             </p>
           </header>
 
