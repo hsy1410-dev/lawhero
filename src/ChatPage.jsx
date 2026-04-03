@@ -242,7 +242,7 @@ const addChatConversation = async () => {
 
   await setDoc(doc(db, "users", uid, "conversations", newId), {
     title: "법률 상담",
-    type: currentProjectId ? "blog" : "chat", // ⭐ 중요
+    type: "chat",
     projectId: currentProjectId || null,
     tone: null,
     systemPrompt: "",
@@ -256,6 +256,19 @@ const buildMessagesForApi = () => {
     role: m.sender === "user" ? "user" : "assistant",
     content: m.text,
   }));
+};
+const fetchWithTimeout = async (url, options, timeoutMs = 45000) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 };
 
   // 첫 인트로 타이핑
@@ -729,7 +742,7 @@ useEffect(() => {
   }
 
   // 💬 일반 채팅
-  const r = await fetch("/api/chat", {
+  const r = await fetchWithTimeout("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -758,7 +771,6 @@ useEffect(() => {
 
   const trimmed = text.trim();
   const isBlog = currentConv?.type === "blog";
-  const isChat = currentConv?.type === "chat";
 
   // ❌ 블로그인데 톤 안 고르면 차단
   if (isBlog && !currentConv?.tone) return;
@@ -810,10 +822,24 @@ try {
     }, 300);
   }
 
+} catch (error) {
+  console.error("❌ sendMessage 실패:", error);
+  await saveMessage(
+    "bot",
+    "❌ 응답을 불러오지 못했습니다. 잠시 후 다시 시도해주세요."
+  );
 } finally {
   setLoading(false);
 }
 
+};
+const submitInput = () => {
+  const text = input.trim();
+  if (!text) return;
+
+  setInput("");
+  resetTextareaHeight();
+  sendMessage(text);
 };
 
   /* ---------------- Tone ---------------- */
@@ -1365,16 +1391,11 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
       e.preventDefault();
 
       const text = input.trim();
-      setInput("");
-
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
 
       // 🔒 '작' 같은 찌꺼기 전송 방지
       if (text.length <= 1) return;
 
-      sendMessage(text);
+      submitInput();
     }
   }}
   className={`flex-1 border px-4 py-2 rounded-xl resize-none overflow-hidden leading-relaxed dark:border-neutral-600 ${
@@ -1394,8 +1415,10 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
 
 
             <button
-              onClick={() => sendMessage(input)}
-              disabled={!currentConv?.tone}
+              onClick={submitInput}
+              disabled={
+                loading || (currentConv?.type === "blog" && !currentConv?.tone)
+              }
               className="px-5 py-2 rounded-xl bg-indigo-600 dark:bg-neutral-700 text-white disabled:opacity-40"
             >
               전송
