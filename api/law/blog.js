@@ -214,7 +214,7 @@ const requestGPT = async (messages, systemPrompt, options = {}) => {
   const res = await openai.responses.create({
     model: "gpt-5.2",
     reasoning: {
-      effort: "minimal",
+      effort: "low",
     },
     input: [
       { role: "system", content: systemPrompt },
