@@ -1,7 +1,6 @@
 // /api/law/blog.js
 import OpenAI from "openai";
 import fs from "fs";
-import path from "path";
 
 /* =========================================================
    1. Runtime
@@ -56,27 +55,25 @@ const TONE_PROMPTS = {
 /* =========================================================0
    3. 출력 JSON 스키마(프롬프트용)
 ========================================================= */
+const OUTPUT_KEYS = [
+  "title",
+  "intro",
+  "body",
+  "conclusion",
+  "summary_table",
+];
+
 const OUTPUT_SCHEMA = `
-{ 경찰서, 사이버수사대, 지급정지 관련된 내용 넣지말아줘
-  "title": "string (H1 제목, 제목 형식은 반드시 5.txt의 규칙을 따른다)",
-  "intro": "string (도입부 출력 형식
-(3줄)
-제목 작성 후 반드시 도입부(3~5문장)를 작성하며, 도입부에는 키워드를 포함하지 않는다. 도입부는 다음 5가지 형식 중 하나를 자동 선택해 작성한다.
-
-1️⃣ 표 형식 도입부: ‘좋은 대처법 vs 잘못된 대처법’ 표 후 간단한 해석.  
-2️⃣ 대화체 도입부: 피해자-사기범 대화 후 전문가의 코멘트.  
-3️⃣ 체크리스트 도입부: 사기 수법의 특징 4가지 ✔️로 제시.  
-4️⃣ 뉴스 인용 도입부: 실제 뉴스 사례 요약 + 질문 연결.  
-5️⃣ FAQ 도입부: 피해자 질문 인용 + “이 글을 끝까지 읽어보세요.” 문장.
-
-도입부 형식은 구성 선택(1~7)에 따라 자동 결정한다.",
-  "body": "string (markdown, H2/H3 구조 포함, 본문 전체,최소 3개의 소제목 포함, 
-   전체 문체는 구성 선택 번호에 맞게 글 쓰기
-   ,글 쓸 때 마다 글의 구성과 문단의 순서가 완전히 달라야함, 1,500자 이상 1,800자 이하)",
-  "conclusion": "string ( 결론은 ‘요약 → 공감 문장 → 클릭 유도 문장’ 순으로 구성.  )",
-  "summary_table": "string (markdown table, 글 전체 요약, 글 마다 각기 다른 구성의 표 구성)"
+{
+  "title": "string",
+  "intro": "string",
+  "body": "string",
+  "conclusion": "string",
+  "summary_table": "string"
 }
 `;
+
+const STRUCTURED_INPUT_PATTERN = /✅키워드:|✅사기내용:|✅구성선택:/i;
 
 /* =========================================================
    5. TXT Loader (안전)
@@ -107,7 +104,7 @@ const loadREF = () => ({
 /* =========================================================
    6. System Prompt Builder
 ========================================================= */
-const buildSystemPrompt = (REF, category, toneKey) => `
+const buildSystemPrompt = (REF, category, toneKey, options = {}) => `
 당신은 **10년 이상 경력의 법률 전문 블로거**입니다.
 아래 JSON 스키마를 **정확히** 따르세요.
 JSON 이외의 출력은 **절대 금지**합니다.
@@ -124,12 +121,18 @@ ${REF.t5}
 ${REF.t1}
 
 # 공통 규칙
+- 경찰서, 사이버수사대, 지급정지 관련 내용은 넣지 말 것
 - title에는 # 금지
+- JSON 키는 정확히 title, intro, body, conclusion, summary_table만 사용
 - intro는 3~5문장
-- body는 H2/H3 구조 + 1,500자 이상 2,000자 이하
+- body는 H2/H3 구조 + 최소 3개의 소제목 포함
+- body는 ${options.bodyLength || "1,100자 이상 1,400자 이하"}
+- conclusion은 2~3문장
+- summary_table은 2~4행의 간결한 markdown table
 - summary_table은 markdown table
 - 글 구성은 매번 완전히 다르게
-- 글 전체 글자수 2,100자 넘지않게 강조
+- 글 전체 글자수는 ${options.totalLength || "2,100자 이하"}로 제한
+- 문자열 안에 불필요한 이스케이프나 설명문을 넣지 말 것
 
 # 참고 지식 (복붙 금지)
 ${REF.t2}
@@ -150,21 +153,69 @@ ${category || "일반"}
    7. Output Validator
 ========================================================= */
 const isValidOutput = (json) => {
-  const keys = ["title", "intro", "body", "conclusion", "summary_table"];
   return (
     json &&
-    keys.every(
+    OUTPUT_KEYS.every(
       (k) => typeof json[k] === "string" && json[k].trim().length > 0
     )
   );
 };
 
+const getMissingKeys = (json) =>
+  OUTPUT_KEYS.filter(
+    (k) => typeof json?.[k] !== "string" || !json[k]?.trim?.()
+  );
+
+const pickRelevantMessages = (messages = []) => {
+  const normalized = (Array.isArray(messages) ? messages : [])
+    .filter(
+      (m) =>
+        m &&
+        typeof m.role === "string" &&
+        typeof m.content === "string" &&
+        m.content.trim()
+    )
+    .map((m) => ({
+      role: m.role,
+      content: m.content.trim(),
+    }));
+
+  const structuredUser = [...normalized]
+    .reverse()
+    .find(
+      (m) => m.role === "user" && STRUCTURED_INPUT_PATTERN.test(m.content)
+    );
+  if (structuredUser) {
+    return [structuredUser];
+  }
+
+  const lastUser = [...normalized].reverse().find((m) => m.role === "user");
+  if (lastUser) {
+    return [lastUser];
+  }
+
+  return normalized.slice(-3);
+};
+
+const unwrapJsonText = (raw = "") => {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  return fenced?.[1]?.trim() || text;
+};
+
+const tryParseJson = (raw) => JSON.parse(unwrapJsonText(raw));
+
 /* =========================================================
    8. GPT-5.2 호출 (Responses API)
 ========================================================= */
-const requestGPT = async (messages, systemPrompt) => {
+const requestGPT = async (messages, systemPrompt, options = {}) => {
   const res = await openai.responses.create({
     model: "gpt-5.2",
+    reasoning: {
+      effort: "minimal",
+    },
     input: [
       { role: "system", content: systemPrompt },
       ...messages.map((m) => ({
@@ -177,10 +228,18 @@ const requestGPT = async (messages, systemPrompt) => {
         type: "json_object", // ✅ 이것만 가능
       },
     },
-    max_output_tokens: 4096,
+    max_output_tokens: options.maxOutputTokens || 4096,
   });
 
-  return res.output_text;
+  return {
+    raw: res.output_text || "",
+    meta: {
+      id: res.id || null,
+      status: res.status || null,
+      incomplete_reason: res.incomplete_details?.reason || null,
+      raw_length: String(res.output_text || "").length,
+    },
+  };
 };
 
 
@@ -203,23 +262,66 @@ export default async function handler(req, res) {
     }
 
     const REF = loadREF();
-    const systemPrompt = buildSystemPrompt(REF, category, tone);
+    const relevantMessages = pickRelevantMessages(messages);
+
+    if (!relevantMessages.length) {
+      return res.status(400).json({ error: "유효한 메시지가 없습니다." });
+    }
 
     let parsed = null;
     let raw = "";
+    let parseError = null;
+    let lastMeta = null;
 
-    for (let i = 0; i < 2; i++) {
-      raw = await requestGPT(messages, systemPrompt);
+    const attempts = [
+      {
+        bodyLength: "1,100자 이상 1,400자 이하",
+        totalLength: "2,100자 이하",
+        maxOutputTokens: 4096,
+      },
+      {
+        bodyLength: "900자 이상 1,200자 이하",
+        totalLength: "1,800자 이하",
+        maxOutputTokens: 5000,
+      },
+    ];
+
+    for (const attempt of attempts) {
+      const systemPrompt = buildSystemPrompt(REF, category, tone, attempt);
+      const result = await requestGPT(
+        relevantMessages,
+        systemPrompt,
+        attempt
+      );
+      raw = result.raw;
+      lastMeta = result.meta;
+
       try {
-        parsed = JSON.parse(raw);
+        parsed = tryParseJson(raw);
         if (isValidOutput(parsed)) break;
-      } catch {}
+      } catch (err) {
+        parseError = err?.message || String(err);
+      }
     }
 
     if (!isValidOutput(parsed)) {
+      const missingKeys = getMissingKeys(parsed);
+
+      console.warn("/api/law/blog invalid output", {
+        parseError,
+        missingKeys,
+        ...lastMeta,
+      });
+
       return res.status(500).json({
         error: "GPT 출력 검증 실패",
         debug_preview: String(raw).slice(0, 500),
+        debug_meta: {
+          parse_error: parseError,
+          missing_keys: missingKeys,
+          relevant_message_count: relevantMessages.length,
+          ...lastMeta,
+        },
       });
     }
 
