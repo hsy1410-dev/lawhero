@@ -11,9 +11,6 @@ export const config = { runtime: "nodejs" };
    2. OpenAI
 ========================================================= */
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const BLOG_MODEL = "gpt-5.2";
-const BLOG_REASONING_EFFORT = "high";
-const BLOG_RETRYABLE_INCOMPLETE_REASONS = new Set(["max_output_tokens"]);
 /* =========================================================
    Tone Prompt Map
 ========================================================= */
@@ -68,11 +65,11 @@ const OUTPUT_KEYS = [
 
 const OUTPUT_SCHEMA = `
 {
-  "title": "string",
-  "intro": "string",
-  "body": "string",
-  "conclusion": "string",
-  "summary_table": "string"
+  "title": "string (H1 제목, 제목 형식은 반드시 5.txt의 규칙을 따른다)",
+  "intro": "string (도입부 3~5문장. 제목 작성 후 반드시 도입부를 작성하며, 도입부에는 키워드를 포함하지 않는다. 도입부는 다음 5가지 형식 중 하나를 자동 선택해 작성한다: 1. 표 형식 도입부 2. 대화체 도입부 3. 체크리스트 도입부 4. 뉴스 인용 도입부 5. FAQ 도입부)",
+  "body": "string (markdown, H2/H3 구조 포함, 최소 3개의 소제목 포함, 전체 문체는 구성 선택 번호에 맞게 작성하고 글마다 구성과 문단 순서가 완전히 달라야 하며 1,500자 이상 1,800자 이하)",
+  "conclusion": "string (결론은 요약 -> 공감 문장 -> 클릭 유도 문장 순으로 구성)",
+  "summary_table": "string (markdown table, 글 전체 요약, 글마다 각기 다른 구성의 표)"
 }
 `;
 
@@ -115,7 +112,7 @@ const loadREF = () => {
 /* =========================================================
    6. System Prompt Builder
 ========================================================= */
-const buildSystemPrompt = (REF, category, toneKey, options = {}) => `
+const buildSystemPrompt = (REF, category, toneKey) => `
 당신은 **10년 이상 경력의 법률 전문 블로거**입니다.
 아래 JSON 스키마를 **정확히** 따르세요.
 JSON 이외의 출력은 **절대 금지**합니다.
@@ -137,12 +134,11 @@ ${REF.t1}
 - JSON 키는 정확히 title, intro, body, conclusion, summary_table만 사용
 - intro는 3~5문장
 - body는 H2/H3 구조 + 최소 3개의 소제목 포함
-- body는 ${options.bodyLength || "1,100자 이상 1,400자 이하"}
+- body는 H2/H3 구조 + 1,500자 이상 2,000자 이하
 - conclusion은 2~3문장
-- summary_table은 2~4행의 간결한 markdown table
 - summary_table은 markdown table
 - 글 구성은 매번 완전히 다르게
-- 글 전체 글자수는 ${options.totalLength || "2,100자 이하"}로 제한
+- 글 전체 글자수 2,100자 넘지않게 강조
 - 문자열 안에 불필요한 이스케이프나 설명문을 넣지 말 것
 
 # 참고 지식 (복붙 금지)
@@ -171,11 +167,6 @@ const isValidOutput = (json) => {
     )
   );
 };
-
-const getMissingKeys = (json) =>
-  OUTPUT_KEYS.filter(
-    (k) => typeof json?.[k] !== "string" || !json[k]?.trim?.()
-  );
 
 const pickRelevantMessages = (messages = []) => {
   const normalized = (Array.isArray(messages) ? messages : [])
@@ -221,13 +212,10 @@ const tryParseJson = (raw) => JSON.parse(unwrapJsonText(raw));
 /* =========================================================
    8. GPT 호출
 ========================================================= */
-const requestGPT = async (messages, systemPrompt, options = {}) => {
-  const requestedMaxOutputTokens = options.maxOutputTokens || 7000;
-  const response = await openai.responses.create({
-    model: BLOG_MODEL,
-    reasoning: {
-      effort: BLOG_REASONING_EFFORT,
-    },
+const requestGPT = async (messages, systemPrompt) => {
+  const res = await openai.responses.create({
+    model: "gpt-5.2",
+    
     input: [
       { role: "system", content: systemPrompt },
       ...messages.map((m) => ({
@@ -240,26 +228,11 @@ const requestGPT = async (messages, systemPrompt, options = {}) => {
         type: "json_object",
       },
     },
-    max_output_tokens: requestedMaxOutputTokens,
+    max_output_tokens: 4096,
   });
 
-  const raw = response.output_text || "";
-
-  return {
-    raw,
-    meta: {
-      api: "responses",
-      model: BLOG_MODEL,
-      reasoning_effort: BLOG_REASONING_EFFORT,
-      id: response.id || null,
-      status: response.status || null,
-      incomplete_reason: response.incomplete_details?.reason || null,
-      requested_max_output_tokens: requestedMaxOutputTokens,
-      raw_length: String(raw).length,
-    },
-  };
+  return res.output_text || "";
 };
-
 
 /* =========================================================
    9. Handler
@@ -280,6 +253,7 @@ export default async function handler(req, res) {
     }
 
     const REF = loadREF();
+    const systemPrompt = buildSystemPrompt(REF, category, tone);
     const relevantMessages = pickRelevantMessages(messages);
 
     if (!relevantMessages.length) {
@@ -288,66 +262,19 @@ export default async function handler(req, res) {
 
     let parsed = null;
     let raw = "";
-    let parseError = null;
-    let lastMeta = null;
 
-    const attempts = [
-      {
-        bodyLength: "1,100자 이상 1,400자 이하",
-        totalLength: "2,100자 이하",
-        maxOutputTokens: 20000,
-      },
-      {
-        bodyLength: "900자 이상 1,200자 이하",
-        totalLength: "1,800자 이하",
-        maxOutputTokens: 24000,
-      },
-    ];
-
-    for (const [index, attempt] of attempts.entries()) {
-      const systemPrompt = buildSystemPrompt(REF, category, tone, attempt);
-      const result = await requestGPT(
-        relevantMessages,
-        systemPrompt,
-        attempt
-      );
-      raw = result.raw;
-      lastMeta = result.meta;
-
+    for (let i = 0; i < 2; i++) {
+      raw = await requestGPT(relevantMessages, systemPrompt);
       try {
         parsed = tryParseJson(raw);
         if (isValidOutput(parsed)) break;
-      } catch (err) {
-        parseError = err?.message || String(err);
-      }
-
-      const shouldRetry =
-        index < attempts.length - 1 &&
-        BLOG_RETRYABLE_INCOMPLETE_REASONS.has(lastMeta?.incomplete_reason);
-
-      if (!shouldRetry) {
-        break;
-      }
+      } catch {}
     }
 
     if (!isValidOutput(parsed)) {
-      const missingKeys = getMissingKeys(parsed);
-
-      console.warn("/api/law/blog invalid output", {
-        parseError,
-        missingKeys,
-        ...lastMeta,
-      });
-
       return res.status(500).json({
         error: "GPT 출력 검증 실패",
         debug_preview: String(raw).slice(0, 500),
-        debug_meta: {
-          parse_error: parseError,
-          missing_keys: missingKeys,
-          relevant_message_count: relevantMessages.length,
-          ...lastMeta,
-        },
       });
     }
 
