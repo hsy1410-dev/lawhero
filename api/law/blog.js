@@ -11,6 +11,8 @@ export const config = { runtime: "nodejs" };
    2. OpenAI
 ========================================================= */
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const BLOG_MODEL = "gpt-5.2";
+const BLOG_REASONING_EFFORT = "medium";
 /* =========================================================
    Tone Prompt Map
 ========================================================= */
@@ -52,7 +54,7 @@ const TONE_PROMPTS = {
 `,
 };
 
-/* =========================================================0
+/* =========================================================
    3. 출력 JSON 스키마(프롬프트용)
 ========================================================= */
 const OUTPUT_KEYS = [
@@ -90,16 +92,24 @@ const readTxtSafe = (filename) => {
   return fs.readFileSync(normalized, "utf8");
 };
 
-const loadREF = () => ({
-  t1: readTxtSafe("1.txt"),
-  t2: readTxtSafe("2.txt"),
-  t3: readTxtSafe("3.txt"),
-  t4: readTxtSafe("4.txt"),
-  t5: readTxtSafe("5.txt"),
-  t6: readTxtSafe("6.txt"),
-  t7: readTxtSafe("7.txt"),
-  t8: readTxtSafe("8.txt"),
-});
+let refCache = null;
+
+const loadREF = () => {
+  if (refCache) return refCache;
+
+  refCache = {
+    t1: readTxtSafe("1.txt"),
+    t2: readTxtSafe("2.txt"),
+    t3: readTxtSafe("3.txt"),
+    t4: readTxtSafe("4.txt"),
+    t5: readTxtSafe("5.txt"),
+    t6: readTxtSafe("6.txt"),
+    t7: readTxtSafe("7.txt"),
+    t8: readTxtSafe("8.txt"),
+  };
+
+  return refCache;
+};
 
 /* =========================================================
    6. System Prompt Builder
@@ -208,13 +218,14 @@ const unwrapJsonText = (raw = "") => {
 const tryParseJson = (raw) => JSON.parse(unwrapJsonText(raw));
 
 /* =========================================================
-   8. GPT-5.2 호출 (Responses API)
+   8. GPT 호출
 ========================================================= */
 const requestGPT = async (messages, systemPrompt, options = {}) => {
-  const res = await openai.responses.create({
-    model: "gpt-5.2",
+  const requestedMaxOutputTokens = options.maxOutputTokens || 7000;
+  const response = await openai.responses.create({
+    model: BLOG_MODEL,
     reasoning: {
-      effort: "medium",
+      effort: BLOG_REASONING_EFFORT,
     },
     input: [
       { role: "system", content: systemPrompt },
@@ -225,19 +236,25 @@ const requestGPT = async (messages, systemPrompt, options = {}) => {
     ],
     text: {
       format: {
-        type: "json_object", // ✅ 이것만 가능
+        type: "json_object",
       },
     },
-    max_output_tokens: options.maxOutputTokens || 4096,
+    max_output_tokens: requestedMaxOutputTokens,
   });
 
+  const raw = response.output_text || "";
+
   return {
-    raw: res.output_text || "",
+    raw,
     meta: {
-      id: res.id || null,
-      status: res.status || null,
-      incomplete_reason: res.incomplete_details?.reason || null,
-      raw_length: String(res.output_text || "").length,
+      api: "responses",
+      model: BLOG_MODEL,
+      reasoning_effort: BLOG_REASONING_EFFORT,
+      id: response.id || null,
+      status: response.status || null,
+      incomplete_reason: response.incomplete_details?.reason || null,
+      requested_max_output_tokens: requestedMaxOutputTokens,
+      raw_length: String(raw).length,
     },
   };
 };
@@ -277,12 +294,12 @@ export default async function handler(req, res) {
       {
         bodyLength: "1,100자 이상 1,400자 이하",
         totalLength: "2,100자 이하",
-        maxOutputTokens: 4096,
+        maxOutputTokens: 7000,
       },
       {
         bodyLength: "900자 이상 1,200자 이하",
         totalLength: "1,800자 이하",
-        maxOutputTokens: 5000,
+        maxOutputTokens: 9000,
       },
     ];
 
@@ -327,6 +344,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json(parsed);
   } catch (err) {
+    console.error("/api/law/blog error", err);
+
     return res.status(500).json({
       error: "API 내부 에러",
       message: err?.message || String(err),
