@@ -629,17 +629,15 @@ useEffect(() => {
   }
 
   try {
-    const res = await fetch("/api/law/blog", {
+    const res = await fetch("/api/law/title", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         category: "블로그",
-        tone: currentConv?.tone ?? "expert",
         messages: messages.map((m) => ({
           role: m.sender === "user" ? "user" : "assistant",
           content: m.text,
         })),
-        // mode: "title", // 서버가 지원하면 켜기
       }),
     });
 
