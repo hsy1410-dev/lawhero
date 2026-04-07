@@ -294,12 +294,12 @@ export default async function handler(req, res) {
       {
         bodyLength: "1,100자 이상 1,400자 이하",
         totalLength: "2,100자 이하",
-        maxOutputTokens: 7000,
+        maxOutputTokens: 24000,
       },
       {
         bodyLength: "900자 이상 1,200자 이하",
         totalLength: "1,800자 이하",
-        maxOutputTokens: 9000,
+        maxOutputTokens: 24000,
       },
     ];
 
