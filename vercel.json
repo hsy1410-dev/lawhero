@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/law/blog.js": {
+      "maxDuration": 300
+    }
+  },
   "routes": [
     { "src": "/api/chat", "dest": "/api/chat.js" },
     { "src": "/api/title", "dest": "/api/title.js" }
