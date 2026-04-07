@@ -13,6 +13,7 @@ export const config = { runtime: "nodejs" };
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const BLOG_MODEL = "gpt-5.2";
 const BLOG_REASONING_EFFORT = "xhigh";
+const BLOG_RETRYABLE_INCOMPLETE_REASONS = new Set(["max_output_tokens"]);
 /* =========================================================
    Tone Prompt Map
 ========================================================= */
@@ -294,7 +295,7 @@ export default async function handler(req, res) {
       {
         bodyLength: "1,100자 이상 1,400자 이하",
         totalLength: "2,100자 이하",
-        maxOutputTokens: 24000,
+        maxOutputTokens: 20000,
       },
       {
         bodyLength: "900자 이상 1,200자 이하",
@@ -303,7 +304,7 @@ export default async function handler(req, res) {
       },
     ];
 
-    for (const attempt of attempts) {
+    for (const [index, attempt] of attempts.entries()) {
       const systemPrompt = buildSystemPrompt(REF, category, tone, attempt);
       const result = await requestGPT(
         relevantMessages,
@@ -318,6 +319,14 @@ export default async function handler(req, res) {
         if (isValidOutput(parsed)) break;
       } catch (err) {
         parseError = err?.message || String(err);
+      }
+
+      const shouldRetry =
+        index < attempts.length - 1 &&
+        BLOG_RETRYABLE_INCOMPLETE_REASONS.has(lastMeta?.incomplete_reason);
+
+      if (!shouldRetry) {
+        break;
       }
     }
 
