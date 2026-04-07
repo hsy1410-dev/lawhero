@@ -12,7 +12,7 @@ export const config = { runtime: "nodejs" };
 ========================================================= */
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const BLOG_MODEL = "gpt-5.2";
-const BLOG_REASONING_EFFORT = "medium";
+const BLOG_REASONING_EFFORT = "high";
 /* =========================================================
    Tone Prompt Map
 ========================================================= */
