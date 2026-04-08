@@ -74,6 +74,7 @@ const OUTPUT_SCHEMA = `
 `;
 
 const STRUCTURED_INPUT_PATTERN = /✅키워드:|✅사기내용:|✅구성선택:/i;
+const MAX_GENERATION_ATTEMPTS = 3;
 
 /* =========================================================
    5. TXT Loader (안전)
@@ -134,7 +135,7 @@ ${REF.t1}
 - JSON 키는 정확히 title, intro, body, conclusion, summary_table만 사용
 - intro는 3~5문장
 - body는 H2/H3 구조 + 최소 3개의 소제목 포함
-- body는 H2/H3 구조 + 1,500자 이상 2,000자 이하
+- body는 H2/H3 구조 + 1,500자 이상 1,800자 이하
 - conclusion은 2~3문장
 - summary_table은 markdown table
 - 글 구성은 매번 완전히 다르게
@@ -207,7 +208,74 @@ const unwrapJsonText = (raw = "") => {
   return fenced?.[1]?.trim() || text;
 };
 
-const tryParseJson = (raw) => JSON.parse(unwrapJsonText(raw));
+const parseJsonSafely = (raw) => {
+  try {
+    return {
+      parsed: JSON.parse(unwrapJsonText(raw)),
+      parseError: null,
+    };
+  } catch (error) {
+    return {
+      parsed: null,
+      parseError: error,
+    };
+  }
+};
+
+const inspectGenerationResult = ({ raw, parsed, parseError, responseMeta }) => {
+  const text = unwrapJsonText(raw);
+  const missingKeys = OUTPUT_KEYS.filter(
+    (key) => typeof parsed?.[key] !== "string" || !parsed[key].trim()
+  );
+  const parseMessage = parseError?.message || null;
+  const incompleteReason = responseMeta?.incompleteDetails?.reason || null;
+  const appearsTruncated =
+    incompleteReason === "max_output_tokens" ||
+    /Unexpected end of JSON input|Unterminated string/i.test(parseMessage || "") ||
+    (!!text && !text.trim().endsWith("}") && !parsed);
+
+  return {
+    valid: !!parsed && missingKeys.length === 0,
+    missingKeys,
+    parseMessage,
+    rawLength: text.length,
+    appearsTruncated,
+    responseStatus: responseMeta?.status || null,
+    incompleteReason,
+  };
+};
+
+const buildRetryInstruction = (inspection) => {
+  const reasons = [];
+
+  if (inspection.appearsTruncated) {
+    reasons.push("직전 응답이 JSON 중간에서 끊겼습니다");
+  }
+
+  if (inspection.parseMessage) {
+    reasons.push(`파싱 오류: ${inspection.parseMessage}`);
+  }
+
+  if (inspection.missingKeys.length) {
+    reasons.push(`누락 키: ${inspection.missingKeys.join(", ")}`);
+  }
+
+  if (!reasons.length) {
+    reasons.push("직전 응답이 스키마 검증을 통과하지 못했습니다");
+  }
+
+  return [
+    `이전 응답은 ${reasons.join(" / ")}.`,
+    "이전 응답은 폐기하고, JSON 객체 전체를 처음부터 다시 작성하세요.",
+    "반드시 title, intro, body, conclusion, summary_table 다섯 개 키만 포함하세요.",
+    "반드시 마지막 중괄호까지 닫힌 완전한 JSON만 출력하세요.",
+    inspection.appearsTruncated || inspection.incompleteReason === "max_output_tokens"
+      ? "출력이 다시 잘리지 않도록 body는 1,500자 이상 1,700자 이하로, summary_table은 짧고 간결하게 작성하세요."
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
 
 /* =========================================================
    8. GPT 호출
@@ -228,10 +296,14 @@ const requestGPT = async (messages, systemPrompt) => {
         type: "json_object",
       },
     },
-    max_output_tokens: 4096,
+    max_output_tokens: 8000,
   });
 
-  return res.output_text || "";
+  return {
+    raw: res.output_text || "",
+    status: res.status || null,
+    incompleteDetails: res.incomplete_details || null,
+  };
 };
 
 /* =========================================================
@@ -262,19 +334,62 @@ export default async function handler(req, res) {
 
     let parsed = null;
     let raw = "";
+    let lastInspection = null;
+    let attemptMessages = relevantMessages;
 
-    for (let i = 0; i < 2; i++) {
-      raw = await requestGPT(relevantMessages, systemPrompt);
-      try {
-        parsed = tryParseJson(raw);
-        if (isValidOutput(parsed)) break;
-      } catch {}
+    for (let i = 0; i < MAX_GENERATION_ATTEMPTS; i++) {
+      const responseMeta = await requestGPT(attemptMessages, systemPrompt);
+      raw = responseMeta.raw;
+
+      const { parsed: candidate, parseError } = parseJsonSafely(raw);
+      const inspection = inspectGenerationResult({
+        raw,
+        parsed: candidate,
+        parseError,
+        responseMeta,
+      });
+
+      lastInspection = {
+        attempt: i + 1,
+        ...inspection,
+      };
+
+      if (inspection.valid && isValidOutput(candidate)) {
+        parsed = candidate;
+        break;
+      }
+
+      if (i < MAX_GENERATION_ATTEMPTS - 1) {
+        attemptMessages = [
+          ...relevantMessages,
+          {
+            role: "user",
+            content: buildRetryInstruction(inspection),
+          },
+        ];
+      }
     }
 
     if (!isValidOutput(parsed)) {
+      console.error("/api/law/blog validation failed", {
+        ...lastInspection,
+        preview: unwrapJsonText(raw).slice(0, 200),
+        tail: unwrapJsonText(raw).slice(-200),
+      });
+
       return res.status(500).json({
         error: "GPT 출력 검증 실패",
-        debug_preview: String(raw).slice(0, 500),
+        debug_preview: unwrapJsonText(raw).slice(0, 500),
+        debug_tail: unwrapJsonText(raw).slice(-200),
+        debug_meta: {
+          attempts: lastInspection?.attempt || 0,
+          raw_length: lastInspection?.rawLength || 0,
+          parse_error: lastInspection?.parseMessage || null,
+          appears_truncated: !!lastInspection?.appearsTruncated,
+          response_status: lastInspection?.responseStatus || null,
+          incomplete_reason: lastInspection?.incompleteReason || null,
+          missing_keys: lastInspection?.missingKeys || [],
+        },
       });
     }
 
