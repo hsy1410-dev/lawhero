@@ -1180,7 +1180,7 @@ if ((!globalEnabled || role === "pending") && !isAdmin) {
             >
               <div className="min-w-0">
                 <h1 className="text-xl font-semibold dark:text-white">
-                  LAW HERO
+                  LAWHERE
                 </h1>
                 <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">
                   {user?.email || "사용자"} 님
