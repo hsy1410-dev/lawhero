@@ -4,7 +4,7 @@ import {
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
 } from "firebase/auth";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion as Motion, AnimatePresence } from "framer-motion";
 
 export default function Login({ goSignup, onFinishLogin }) {
   const [email, setEmail] = useState("");
@@ -66,36 +66,51 @@ export default function Login({ goSignup, onFinishLogin }) {
   };
 
   return (
-    <div className="w-screen h-screen relative overflow-hidden">
-      {/* 배경 */}
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/back.png')" }}
-      />
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#f8fbff] px-5 py-10">
+      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-sky-100/70 blur-3xl" />
+      <div className="pointer-events-none -bottom-32 -right-20 absolute h-96 w-96 rounded-full bg-blue-100/60 blur-3xl" />
 
-      <div className="relative z-10 w-full h-full flex items-center justify-center">
+      <div className="relative z-10 flex min-h-[calc(100vh-5rem)] w-full items-center justify-center">
         <AnimatePresence>
-          <motion.div
+          <Motion.div
             key="login-card"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: 0.4 }}
-            className="
-              relative p-[1px] rounded-2xl
-              bg-gradient-to-br
-              from-sky-400/60 via-indigo-400/40 to-pink-400/60
-              shadow-xl
-            "
+            className="w-full max-w-sm overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_24px_70px_-30px_rgba(15,60,110,0.28)]"
           >
-            <div className="bg-white/90 backdrop-blur-xl p-8 rounded-2xl w-80">
-             <h2 className="text-lg font-semibold mb-4 text-center text-sky-300">
-  LAWHERE
-</h2>
+            <div className="bg-gradient-to-br from-sky-500 to-blue-600 px-8 py-7">
+              <div className="flex items-center justify-center gap-3">
+                <img
+                  src="/ㅇㅇ (4).png"
+                  alt=""
+                  aria-hidden="true"
+                  className="h-11 w-11 shrink-0 object-contain"
+                />
+                <span className="h-7 w-px bg-white/35" aria-hidden="true" />
+                <img
+                  src="/ㅇㅇ (1).png"
+                  alt="LAWHERE"
+                  className="h-8 w-auto max-w-[190px] object-contain"
+                />
+              </div>
+            </div>
+
+            <div className="bg-white px-8 pb-8 pt-7">
+              <div className="mb-6 text-center">
+                <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+                  다시 만나 반가워요
+                </h1>
+                <p className="mt-1.5 text-sm text-slate-500">
+                  로히어 계정으로 로그인해 주세요.
+                </p>
+              </div>
 
               <form onSubmit={handleAuth}>
                 <input
                   type="email"
+                  autoComplete="email"
                   placeholder="Email"
                   value={email}
                   onChange={(e) => {
@@ -103,18 +118,19 @@ export default function Login({ goSignup, onFinishLogin }) {
                     if (error) setError("");
                     if (message) setMessage("");
                   }}
-                  className="w-full p-2 border rounded mb-3"
+                  className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
                 />
 
                 <input
                   type="password"
+                  autoComplete="current-password"
                   placeholder="Password"
                   value={pw}
                   onChange={(e) => {
                     setPw(e.target.value);
                     if (error) setError("");
                   }}
-                  className="w-full p-2 border rounded mb-3"
+                  className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
                 />
 
                 {error && (
@@ -136,21 +152,21 @@ export default function Login({ goSignup, onFinishLogin }) {
                     setError("");
                     setMessage("");
                   }}
-                  className="w-full mb-3 text-sm text-right text-sky-600 hover:text-sky-700"
+                  className="mb-4 w-full text-right text-sm font-medium text-sky-600 transition hover:text-sky-700"
                 >
                   {resetOpen ? "비밀번호 찾기 닫기" : "비밀번호를 잊으셨나요?"}
                 </button>
 
                 <AnimatePresence initial={false}>
                   {resetOpen && (
-                    <motion.div
+                    <Motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="mb-3 rounded-lg border border-sky-100 bg-sky-50 px-3 py-3 text-sm text-sky-800">
+                      <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-3 py-3 text-sm text-sky-800">
                         <p className="mb-2">
                           입력한 이메일로 비밀번호 재설정 링크를 보내드릴게요.
                         </p>
@@ -158,26 +174,21 @@ export default function Login({ goSignup, onFinishLogin }) {
                           type="button"
                           onClick={handlePasswordReset}
                           disabled={resetLoading}
-                          className="w-full rounded-lg bg-white px-3 py-2 font-medium text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="w-full rounded-lg bg-white px-3 py-2 font-medium text-sky-700 shadow-sm transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {resetLoading
                             ? "재설정 메일 보내는 중..."
                             : "재설정 메일 보내기"}
                         </button>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   )}
                 </AnimatePresence>
 
                 <button
                   type="submit"
                   disabled={loading || resetLoading}
-                  className="
-            w-full p-3 rounded-lg text-white
-            bg-gradient-to-r from-sky-400 to-pink-400
-            hover:from-sky-500 hover:to-pink-500
-            transition disabled:opacity-60 disabled:cursor-not-allowed
-          "
+                  className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 p-3 font-semibold text-white shadow-lg shadow-sky-200/70 transition hover:from-sky-600 hover:to-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   로그인
                 </button>
@@ -185,12 +196,12 @@ export default function Login({ goSignup, onFinishLogin }) {
 
               <p
                 onClick={goSignup}
-                className="text-sm text-center mt-3 cursor-pointer text-sky-600"
+                className="mt-4 cursor-pointer text-center text-sm font-medium text-sky-600 transition hover:text-sky-700"
               >
                 회원가입하기
               </p>
             </div>
-          </motion.div>
+          </Motion.div>
         </AnimatePresence>
       </div>
     </div>
